@@ -1,11 +1,11 @@
 {
   "fnmods_update": [
     {
- "version":"9.62",
+ "version":"121.7.0",
  "title":"Update Disponible",
  "description":"RewhasApp Oficial V9.65
 
-Base: 2.23 1.76
+Base: 121.6.0
 
 〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️
 
