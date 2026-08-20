@@ -10,7 +10,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "qmods-telegram-bot"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "b2c7e985-5e1e-42f1-a8e2-a5df52f0ec22"
 
 # Периодическая доставка отложенных уведомлений (оплата, окончание
 # подписки, новости) — см. src/index.ts::scheduled(). Раз в 5 минут
