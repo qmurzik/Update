@@ -13,6 +13,13 @@ export interface Env {
   QMODS_SUBSCRIBE_URL: string;
   QMODS_SUPPORT_URL: string;
   ADMIN_TELEGRAM_IDS: string;
+  /**
+   * Full https URL of this Worker's own /app route, e.g.
+   * "https://qmods-telegram-bot.<account>.workers.dev/app". Only known
+   * after the first deploy, so it's optional — leave empty to hide the
+   * Mini App button until it's set.
+   */
+  WEBAPP_URL: string;
 }
 
 export function adminIds(env: Env): string[] {

@@ -1,12 +1,18 @@
 import type { Env } from '../config';
 import type { InlineKeyboard } from './types';
 
-export const mainMenu = (linked: boolean, isAdmin: boolean): InlineKeyboard => {
+export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = [];
+  const webAppButton: InlineKeyboard[number] | null = env.WEBAPP_URL
+    ? [{ text: '🖥 Открыть в Mini App', web_app: { url: env.WEBAPP_URL } }]
+    : null;
+
   if (!linked) {
     kb.push([{ text: '🔗 Привязать аккаунт QMods', callback_data: 'link:start' }]);
+    if (webAppButton) kb.push(webAppButton);
     kb.push([{ text: '🆘 Поддержка', callback_data: 'm:support' }]);
   } else {
+    if (webAppButton) kb.push(webAppButton);
     kb.push([
       { text: '👤 Профиль', callback_data: 'm:profile' },
       { text: '⭐ Подписка', callback_data: 'm:sub' },

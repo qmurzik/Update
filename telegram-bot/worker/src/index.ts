@@ -5,6 +5,8 @@ import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi } from './qmodsApi';
 import { esc } from './util';
 import type { TgUpdate } from './telegram/types';
+import { APP_HTML } from './webapp/page';
+import { handleWebAppApi } from './webapp/api';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -21,6 +23,15 @@ export default {
       const tg = new TelegramClient(env);
       await tg.setWebhook(`${url.origin}/webhook`, env.TELEGRAM_WEBHOOK_SECRET);
       return new Response('Webhook registered', { status: 200 });
+    }
+
+    // Mini App — static page + its one JSON API endpoint.
+    if (url.pathname === '/app' && request.method === 'GET') {
+      const html = APP_HTML.replace('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL);
+      return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+    if (url.pathname === '/app/api') {
+      return handleWebAppApi(request, env);
     }
 
     if (url.pathname !== '/webhook' || request.method !== 'POST') {

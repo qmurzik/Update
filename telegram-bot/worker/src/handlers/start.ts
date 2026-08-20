@@ -27,10 +27,17 @@ export async function showMainMenu(ctx: Ctx, prefaceText?: string): Promise<void
   if (prefaceText) lines.push(prefaceText, '');
 
   if (linked && me.user) {
-    lines.push(`👤 Вы вошли как <b>${esc(me.user.username)}</b>`);
+    const sub = me.user.subscription;
+    const statusLine = !sub.plan || sub.plan === 'none'
+      ? 'подписки нет'
+      : sub.active
+        ? `🟢 активна · осталось ${sub.days_left} дн.`
+        : `🔴 истекла ${esc(sub.expires_text)}`;
+    lines.push(`👤 <b>${esc(me.user.username)}</b>`);
+    lines.push(`<blockquote>${statusLine}</blockquote>`);
   } else {
     lines.push('🔒 Аккаунт QMods ещё не привязан. Нажмите кнопку ниже, чтобы подключить бота к вашему личному кабинету.');
   }
 
-  await reply(ctx, lines.join('\n'), mainMenu(linked, admin));
+  await reply(ctx, lines.join('\n'), mainMenu(ctx.env, linked, admin));
 }
