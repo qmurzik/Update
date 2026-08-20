@@ -1,3 +1,6 @@
+/** Thin divider under a bolded section header, e.g. `<b>Title</b>\n${DIVIDER}\n\n...`. */
+export const DIVIDER = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
+
 /** Escape user-controlled text before embedding it into an HTML-mode Telegram message. */
 export function esc(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

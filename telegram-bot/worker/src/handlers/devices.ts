@@ -1,6 +1,6 @@
 import type { Ctx } from './context';
 import { confirmKeyboard, devicesKeyboard } from '../telegram/keyboards';
-import { esc } from '../util';
+import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 
@@ -16,7 +16,7 @@ export async function showDevices(ctx: Ctx): Promise<void> {
   const res = await ctx.api.devices(ctx.telegramId);
   const devices = res.devices ?? [];
 
-  const lines = ['<b>📱 Мои устройства</b>', ''];
+  const lines = ['<b>📱 Мои устройства</b>', DIVIDER, ''];
   if (devices.length === 0) {
     lines.push('Устройство ещё не привязано. Оно появится здесь после первого входа в приложении QMods.');
   } else {

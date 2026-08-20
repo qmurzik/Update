@@ -1,7 +1,10 @@
 name = "qmods-telegram-bot"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat"]
+# Намеренно без compatibility_flags = ["nodejs_compat"]: код не использует
+# Node.js API (нет node:events/node:stream/...), а флаг тянет в бандл
+# крупный набор Node-полифиллов (unenv), который только раздувает Worker
+# и может путать сторонние просмотрщики кода в дашборде.
 
 # D1 — собственное операционное хранилище бота (НЕ пользователи QMods):
 # диалоговые состояния, рейт-лимиты, аудит-лог админ-действий.

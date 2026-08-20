@@ -1,6 +1,6 @@
 import type { Ctx } from './context';
 import { paymentsKeyboard } from '../telegram/keyboards';
-import { esc, money } from '../util';
+import { DIVIDER, esc, money } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 
@@ -9,7 +9,7 @@ export async function showPayments(ctx: Ctx): Promise<void> {
   if (!(await requireLinked(ctx, me))) return;
 
   const payments = me.user!.payments ?? [];
-  const lines = ['<b>💳 Оплата / продление</b>', ''];
+  const lines = ['<b>💳 Оплата / продление</b>', DIVIDER, ''];
 
   if (payments.length === 0) {
     lines.push('Платежей пока не было.');
