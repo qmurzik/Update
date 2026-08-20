@@ -99,6 +99,20 @@ export const APP_HTML = `<!doctype html>
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
   .center-screen { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
   .hidden { display: none !important; }
+  .bar { height: 8px; border-radius: 999px; background: var(--card-border); overflow: hidden; margin: 10px 0 4px; }
+  .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #7c3aed); }
+  .ach-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .ach-item { text-align: center; padding: 10px 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-border); }
+  .ach-item.locked { opacity: .35; }
+  .ach-item .ic { font-size: 22px; }
+  .ach-item .t { font-size: 10px; margin-top: 4px; font-weight: 600; line-height: 1.25; }
+  .stars { display: flex; gap: 6px; justify-content: center; margin: 8px 0; }
+  .stars button { font-size: 26px; background: none; border: none; cursor: pointer; opacity: .3; padding: 2px; }
+  .stars button.on { opacity: 1; }
+  textarea { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--bg2); color: var(--text); font-size: 14px; font-family: inherit; resize: vertical; }
+  .copy-row { display: flex; gap: 8px; align-items: center; background: var(--bg2); border-radius: 10px; padding: 8px 10px; margin-top: 6px; }
+  .copy-row code { flex: 1; font-size: 12px; word-break: break-all; }
+  .copy-row button { flex: none; background: var(--card); border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -125,6 +139,7 @@ export const APP_HTML = `<!doctype html>
     <div id="tab-profile" class="tabpanel"></div>
     <div id="tab-sub" class="tabpanel hidden"></div>
     <div id="tab-devices" class="tabpanel hidden"></div>
+    <div id="tab-ach" class="tabpanel hidden"></div>
     <div id="tab-pay" class="tabpanel hidden"></div>
     <div id="tab-notif" class="tabpanel hidden"></div>
   </div>
@@ -133,6 +148,7 @@ export const APP_HTML = `<!doctype html>
     <button class="tab active" data-tab="profile" onclick="switchTab('profile')"><span class="ic">👤</span>Профиль</button>
     <button class="tab" data-tab="sub" onclick="switchTab('sub')"><span class="ic">⭐</span>Подписка</button>
     <button class="tab" data-tab="devices" onclick="switchTab('devices')"><span class="ic">📱</span>Устройства</button>
+    <button class="tab" data-tab="ach" onclick="switchTab('ach')"><span class="ic">🏆</span>Награды</button>
     <button class="tab" data-tab="pay" onclick="switchTab('pay')"><span class="ic">💳</span>Оплата</button>
     <button class="tab" data-tab="notif" onclick="switchTab('notif')"><span class="ic">🔔</span>Увед.</button>
   </div>
@@ -213,7 +229,7 @@ var loaded = {};
 
 function switchTab(name) {
   haptic('light');
-  ['profile', 'sub', 'devices', 'pay', 'notif'].forEach(function (t) {
+  ['profile', 'sub', 'devices', 'ach', 'pay', 'notif'].forEach(function (t) {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
   });
   document.querySelectorAll('.tab').forEach(function (btn) {
@@ -224,6 +240,7 @@ function switchTab(name) {
     if (name === 'profile') renderProfile();
     if (name === 'sub') renderSub();
     if (name === 'devices') renderDevices();
+    if (name === 'ach') renderAch();
     if (name === 'pay') renderPay();
     if (name === 'notif') renderNotif();
   }
@@ -246,13 +263,66 @@ function mainButtonClick() {
 }
 
 function renderProfile() {
+  var lvl = me.level || { icon: '🌱', title: '—' };
   document.getElementById('tab-profile').innerHTML =
     '<div class="card"><h3>Профиль</h3>' +
     row('Логин', '<b>' + esc(me.username) + '</b>') +
     row('ID', '<code>' + esc(me.id) + '</code>') +
     row('Регистрация', esc(me.created_text)) +
     row('Статус', me.status === 'active' ? '🟢 активен' : '🔴 не активен') +
-    '</div>';
+    row('Уровень', lvl.icon + ' ' + esc(lvl.title)) +
+    '</div>' +
+    '<div class="card"><h3>Приложение</h3><p class="muted">Мобильное приложение QMods — быстрый доступ к модификациям с телефона.</p>' +
+    '<button class="btn primary" onclick="openApp()">⬇️ Скачать APK</button></div>' +
+    '<div id="reviewCard"></div>';
+  renderReview();
+}
+
+function openApp() {
+  api('app_release', {}).then(function (res) {
+    var url = (res && (res.download_url || res.cabinet_url)) || SUBSCRIBE_URL;
+    if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
+  });
+}
+
+function renderReview() {
+  var el = document.getElementById('reviewCard');
+  el.innerHTML = '<div class="card"><h3>Отзыв</h3><div class="skeleton"></div></div>';
+  api('review', {}).then(function (res) {
+    if (res && res.review) {
+      var stars = '';
+      for (var i = 1; i <= 5; i++) stars += (i <= res.review.rating ? '★' : '☆');
+      el.innerHTML = '<div class="card"><h3>Ваш отзыв</h3><p>' + stars + '</p><p class="muted">' + esc(res.review.text) + '</p>' +
+        '<p class="muted">' + (res.review.status === 'approved' ? '✅ опубликован' : '⏳ на модерации') + '</p></div>';
+      return;
+    }
+    var starsHtml = '<div class="stars" id="starPicker">';
+    for (var s = 1; s <= 5; s++) starsHtml += '<button type="button" data-star="' + s + '" onclick="pickStar(' + s + ')">★</button>';
+    starsHtml += '</div>';
+    el.innerHTML = '<div class="card"><h3>Оставить отзыв</h3><p class="muted">Поделитесь впечатлением о QMods.</p>' +
+      starsHtml +
+      '<textarea id="reviewText" rows="3" placeholder="Что думаете о QMods?"></textarea>' +
+      '<button class="btn primary" onclick="submitReview()">Отправить</button></div>';
+    window.__reviewRating = 0;
+  });
+}
+
+function pickStar(n) {
+  window.__reviewRating = n;
+  document.querySelectorAll('#starPicker button').forEach(function (btn) {
+    btn.classList.toggle('on', Number(btn.getAttribute('data-star')) <= n);
+  });
+}
+
+function submitReview() {
+  var rating = window.__reviewRating || 0;
+  var text = document.getElementById('reviewText').value.trim();
+  if (rating < 1) { alert('Выберите оценку.'); return; }
+  if (text.length < 10) { alert('Текст отзыва — минимум 10 символов.'); return; }
+  api('review_add', { rating: rating, text: text }).then(function (res) {
+    if (res && res.success) { haptic('medium'); renderReview(); }
+    else alert((res && res.error) || 'Не удалось отправить отзыв.');
+  });
 }
 
 function renderSub() {
@@ -290,6 +360,48 @@ function renderDevices() {
 function removeDevice(id) {
   if (!confirm('Отвязать устройство?')) return;
   api('device_remove', { device_id: id }).then(function () { loaded.devices = false; switchTab('devices'); });
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(function () { haptic('light'); alert('Скопировано'); });
+  } else {
+    prompt('Скопируйте:', text);
+  }
+}
+
+function renderAch() {
+  var el = document.getElementById('tab-ach');
+  el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  Promise.all([api('achievements', {}), api('referrals', {})]).then(function (results) {
+    var a = results[0], r = results[1];
+    if (!a || !a.success) { el.innerHTML = '<div class="card"><p class="muted">Не удалось загрузить.</p></div>'; return; }
+
+    var progressText = a.progress.next_code
+      ? (a.progress.closest ? (a.progress.closest.current + '/' + a.progress.closest.min + ' ' + esc(a.progress.closest.label)) : (a.progress.percent + '%')) + ' → ' + esc(a.progress.next_title || '')
+      : 'Максимальный уровень достигнут';
+
+    var html = '<div class="card"><h3>Уровень</h3>' +
+      '<div class="big-stat">' + a.level.icon + ' ' + esc(a.level.title) + '</div>' +
+      '<p class="muted">' + esc(a.level.perks) + '</p>' +
+      '<div class="bar"><span style="width:' + a.progress.percent + '%"></span></div>' +
+      '<p class="muted">' + progressText + '</p></div>';
+
+    html += '<div class="card"><h3>Достижения ' + a.achievements.filter(function (x) { return x.earned; }).length + '/' + a.achievements.length + '</h3><div class="ach-grid">';
+    a.achievements.forEach(function (item) {
+      html += '<div class="ach-item' + (item.earned ? '' : ' locked') + '" title="' + esc(item.desc) + '">' +
+        '<div class="ic">' + item.icon + '</div><div class="t">' + esc(item.title) + '</div></div>';
+    });
+    html += '</div></div>';
+
+    if (r && r.success) {
+      html += '<div class="card"><h3>Рефералы</h3><p class="muted">Приглашено: <b>' + r.ref_count + '</b></p>' +
+        '<p class="muted">Достижения и бонусные дни за друзей начисляются автоматически.</p>' +
+        '<div class="copy-row"><code>' + esc(r.ref_link) + '</code><button onclick="copyText(\\'' + esc(r.ref_link) + '\\')">Копия</button></div></div>';
+    }
+
+    el.innerHTML = html;
+  });
 }
 
 function renderPay() {

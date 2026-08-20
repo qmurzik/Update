@@ -68,6 +68,10 @@ export class QmodsUserApi {
         subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string };
         device: { linked: boolean; id: string };
         payments: Array<{ plan: string; amount: number; date: number; date_text: string }>;
+        level: { code: string; title: string; icon: string; perks: string };
+        achievements_unlocked: number;
+        achievements_total: number;
+        ref_count: number;
       };
     }>(this.url, this.token, 'me', { telegram_id: telegramId });
   }
@@ -101,6 +105,47 @@ export class QmodsUserApi {
 
   notificationsAck(telegramId: string, ids: string[]) {
     return callApi(this.url, this.token, 'notifications_ack', { telegram_id: telegramId, ids }, 'POST');
+  }
+
+  achievements(telegramId: string) {
+    return callApi<{
+      level: { code: string; title: string; icon: string; perks: string };
+      progress: {
+        next_code: string | null;
+        next_title: string | null;
+        percent: number;
+        closest: { label: string; current: number; min: number } | null;
+      };
+      stats: { payments: number; spent: number; days: number; refs: number };
+      achievements: Array<{ code: string; title: string; desc: string; icon: string; bonus: number; earned: boolean }>;
+      newly_unlocked: string[];
+      level_up: string | null;
+      bonus_days: number;
+    }>(this.url, this.token, 'achievements', { telegram_id: telegramId });
+  }
+
+  referrals(telegramId: string) {
+    return callApi<{ ref_code: string; ref_link: string; ref_count: number }>(this.url, this.token, 'referrals', {
+      telegram_id: telegramId,
+    });
+  }
+
+  appRelease() {
+    return callApi<{ version: string; changelog: string; has_file: boolean; download_url: string | null; cabinet_url: string }>(
+      this.url,
+      this.token,
+      'app_release'
+    );
+  }
+
+  review(telegramId: string) {
+    return callApi<{ review: { rating: number; text: string; status: string } | null }>(this.url, this.token, 'review', {
+      telegram_id: telegramId,
+    });
+  }
+
+  reviewAdd(telegramId: string, rating: number, text: string) {
+    return callApi(this.url, this.token, 'review_add', { telegram_id: telegramId, rating, text }, 'POST');
   }
 }
 

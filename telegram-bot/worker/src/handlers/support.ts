@@ -6,6 +6,6 @@ import { reply } from './reply';
 export async function showSupport(ctx: Ctx): Promise<void> {
   const text =
     `<b>🆘 Поддержка</b>\n${DIVIDER}\n\n` +
-    'Если у вас проблема с доступом, оплатой или устройством — опишите её на странице поддержки QMods, и мы ответим как можно быстрее.';
+    'Проблема с доступом, оплатой или устройством? Опишите её на странице поддержки — ответим как можно быстрее. Общие вопросы можно задать в чате сообщества.';
   await reply(ctx, text, supportKeyboard(ctx.env));
 }

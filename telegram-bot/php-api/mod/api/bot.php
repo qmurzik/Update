@@ -19,6 +19,8 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/includes/bootstrap.php';
 require_once dirname(__DIR__) . '/includes/bot_notify.php';
+require_once dirname(__DIR__) . '/includes/achievements.php';
+require_once dirname(__DIR__) . '/includes/reviews.php';
 require_once dirname(__DIR__) . '/subscribe/config.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -144,6 +146,19 @@ function find_user_by_telegram_id(array $users, string $telegramId): ?array
     return null;
 }
 
+/** Тот же алгоритм, что и make_ref_code() в mod/cabinet.php. */
+function bot_make_ref_code(array $users): string
+{
+    do {
+        $code = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
+        $exists = false;
+        foreach ($users as $u) {
+            if (($u['ref_code'] ?? '') === $code) { $exists = true; break; }
+        }
+    } while ($exists);
+    return $code;
+}
+
 $req = bot_request_data();
 $action = trim((string)($req['action'] ?? ''));
 
@@ -186,8 +201,17 @@ if ($action === 'me') {
         bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
     }
 
-    foreach (load_users() as $user) {
+    $users = load_users();
+    foreach ($users as $user) {
         if ((string)($user['telegram_id'] ?? '') !== $telegramId) continue;
+
+        // Та же синхронизация ачивок/уровня/бонусных дней, что и на cabinet.php
+        // при открытии страницы — без неё бот-only пользователи никогда бы
+        // не получали бонусы за стаж/платежи/рефералов.
+        sync_achievements_and_level($user, $users);
+        foreach (load_users() as $fresh) {
+            if ((string)($fresh['id'] ?? '') === (string)($user['id'] ?? '')) { $user = $fresh; break; }
+        }
 
         $sub = subscription_info($user);
         $payments = [];
@@ -201,6 +225,15 @@ if ($action === 'me') {
             ];
         }
         usort($payments, static fn(array $a, array $b): int => $b['date'] <=> $a['date']);
+
+        $stats = user_stats($user, $users);
+        $levelCode = (string)($user['level'] ?? calc_level($stats));
+        $levelInfo = LEVELS[$levelCode] ?? LEVELS['newbie'];
+        $achievements = is_array($user['achievements'] ?? null) ? $user['achievements'] : [];
+        $refCount = 0;
+        foreach ($users as $u) {
+            if ((string)($u['referred_by'] ?? '') === (string)($user['username'] ?? '')) $refCount++;
+        }
 
         bot_json([
             'success' => true,
@@ -223,6 +256,15 @@ if ($action === 'me') {
                     'id' => (string)($user['device_id'] ?? ''),
                 ],
                 'payments' => $payments,
+                'level' => [
+                    'code' => $levelCode,
+                    'title' => (string)($levelInfo['title'] ?? ''),
+                    'icon' => (string)($levelInfo['icon'] ?? ''),
+                    'perks' => (string)($levelInfo['perks'] ?? ''),
+                ],
+                'achievements_unlocked' => count($achievements),
+                'achievements_total' => count(ACHIEVEMENTS),
+                'ref_count' => $refCount,
             ],
         ]);
     }
@@ -444,6 +486,214 @@ if ($action === 'notifications_ack') {
     }
 
     mark_bot_notifications_read((string)($user['id'] ?? ''), array_map('strval', $ids));
+    bot_json(['success' => true]);
+}
+
+// ============================================================
+// ACHIEVEMENTS — уровень, прогресс, полный каталог наград
+// ============================================================
+
+if ($action === 'achievements') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    $users = load_users();
+    $user = find_user_by_telegram_id($users, $telegramId);
+    if ($user === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+
+    // Синхронизация здесь тоже нужна: пользователь может открыть раздел
+    // "Достижения" сразу после оплаты, до следующего вызова action=me.
+    $sync = sync_achievements_and_level($user, $users);
+    $users = load_users();
+    $user = find_user_by_telegram_id($users, $telegramId);
+
+    $stats = user_stats($user, $users);
+    $levelCode = (string)($user['level'] ?? calc_level($stats));
+    $levelInfo = LEVELS[$levelCode] ?? LEVELS['newbie'];
+    $progress = level_progress($stats, $levelCode);
+    $earned = is_array($user['achievements'] ?? null) ? $user['achievements'] : [];
+
+    $catalog = [];
+    foreach (ACHIEVEMENTS as $code => $ach) {
+        $catalog[] = [
+            'code' => $code,
+            'title' => (string)($ach['title'] ?? ''),
+            'desc' => (string)($ach['desc'] ?? ''),
+            'icon' => (string)($ach['icon'] ?? ''),
+            'bonus' => (int)($ach['bonus'] ?? 0),
+            'earned' => in_array($code, $earned, true),
+        ];
+    }
+
+    bot_json([
+        'success' => true,
+        'level' => [
+            'code' => $levelCode,
+            'title' => (string)($levelInfo['title'] ?? ''),
+            'icon' => (string)($levelInfo['icon'] ?? ''),
+            'perks' => (string)($levelInfo['perks'] ?? ''),
+        ],
+        'progress' => [
+            'next_code' => $progress['next'],
+            'next_title' => $progress['next'] ? (string)(LEVELS[$progress['next']]['title'] ?? '') : null,
+            'percent' => (int)$progress['best_progress'],
+            'closest' => $progress['closest'],
+        ],
+        'stats' => $stats,
+        'achievements' => $catalog,
+        'newly_unlocked' => $sync['new_achievements'],
+        'level_up' => $sync['level_up'],
+        'bonus_days' => $sync['bonus_days'],
+    ]);
+}
+
+// ============================================================
+// REFERRALS — реферальный код, ссылка, счётчик приглашённых
+// ============================================================
+
+if ($action === 'referrals') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    $user = find_user_by_telegram_id(load_users(), $telegramId);
+    if ($user === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+
+    // Лениво генерируем код при первом обращении — как cabinet.php.
+    if (empty($user['ref_code'])) {
+        [$ok] = update_users(function (array $users) use ($user): array {
+            foreach ($users as &$u) {
+                if (($u['id'] ?? '') === $user['id'] && empty($u['ref_code'])) {
+                    $u['ref_code'] = bot_make_ref_code($users);
+                    break;
+                }
+            }
+            unset($u);
+            return [$users, null];
+        });
+        if (!$ok) bot_json(['success' => false, 'error' => 'Storage error'], 500);
+        $user = find_user_by_telegram_id(load_users(), $telegramId);
+    }
+
+    $users = load_users();
+    $refCount = 0;
+    foreach ($users as $u) {
+        if ((string)($u['referred_by'] ?? '') === (string)($user['username'] ?? '')) $refCount++;
+    }
+
+    bot_json([
+        'success' => true,
+        'ref_code' => (string)($user['ref_code'] ?? ''),
+        'ref_link' => 'https://qmods.ru/mod/register.php?ref=' . urlencode((string)($user['ref_code'] ?? '')),
+        'ref_count' => $refCount,
+    ]);
+}
+
+// ============================================================
+// APP_RELEASE — версия приложения + публичная ссылка на APK (если включена)
+// ============================================================
+
+if ($action === 'app_release') {
+    $releaseFile = DATA_DIR . '/app_release.json';
+    $shareFile = DATA_DIR . '/download_link.json';
+
+    $release = is_file($releaseFile) ? json_decode((string)file_get_contents($releaseFile), true) : null;
+    if (!is_array($release)) $release = [];
+
+    $share = is_file($shareFile) ? json_decode((string)file_get_contents($shareFile), true) : null;
+    $downloadUrl = null;
+    if (is_array($share) && !empty($share['enabled']) && !empty($share['token'])) {
+        $downloadUrl = 'https://qmods.ru/mod/download.php?share=' . urlencode((string)$share['token']);
+    }
+
+    bot_json([
+        'success' => true,
+        'version' => (string)($release['version'] ?? ''),
+        'changelog' => (string)($release['changelog'] ?? ''),
+        'has_file' => !empty($release['has_file']),
+        'download_url' => $downloadUrl,
+        // Без публичной share-ссылки скачивание требует активной сессии на
+        // сайте (обычный логин) — бот не может её подделать, поэтому в
+        // этом случае отдаём только страницу кабинета для скачивания.
+        'cabinet_url' => 'https://qmods.ru/mod/download.php',
+    ]);
+}
+
+// ============================================================
+// REVIEW / REVIEW_ADD — отзыв пользователя
+// ============================================================
+
+if ($action === 'review') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    $user = find_user_by_telegram_id(load_users(), $telegramId);
+    if ($user === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+
+    foreach (load_reviews() as $r) {
+        if (($r['username'] ?? '') !== ($user['username'] ?? '')) continue;
+        bot_json([
+            'success' => true,
+            'review' => [
+                'rating' => (int)($r['rating'] ?? 0),
+                'text' => (string)($r['text'] ?? ''),
+                'status' => (string)($r['status'] ?? 'pending'),
+            ],
+        ]);
+    }
+
+    bot_json(['success' => true, 'review' => null]);
+}
+
+if ($action === 'review_add') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    $rating = (int)($req['rating'] ?? 0);
+    $text = trim((string)($req['text'] ?? ''));
+
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+    if ($rating < 1 || $rating > 5) {
+        bot_json(['success' => false, 'error' => 'Оценка должна быть от 1 до 5.'], 400);
+    }
+    if (mb_strlen($text) < 10) {
+        bot_json(['success' => false, 'error' => 'Отзыв слишком короткий (минимум 10 символов).'], 400);
+    }
+
+    $user = find_user_by_telegram_id(load_users(), $telegramId);
+    if ($user === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+
+    $sub = subscription_info($user);
+    $reviews = load_reviews();
+    $reviews = array_values(array_filter($reviews, static fn($r) => ($r['username'] ?? '') !== $user['username']));
+    $reviews[] = [
+        'id' => bin2hex(random_bytes(16)),
+        'username' => $user['username'],
+        'rating' => $rating,
+        'text' => $text,
+        'created_at' => time(),
+        'status' => 'pending',
+        'verified' => !empty($user['payments']) || $sub['active'],
+    ];
+
+    if (!save_reviews($reviews)) {
+        bot_json(['success' => false, 'error' => 'Не удалось сохранить отзыв.'], 500);
+    }
+
+    log_action('Bot review_add: ' . $user['username']);
     bot_json(['success' => true]);
 }
 

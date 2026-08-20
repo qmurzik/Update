@@ -15,11 +15,13 @@ export async function showNotifications(ctx: Ctx): Promise<void> {
 
   const res = await ctx.api.notifications(ctx.telegramId);
   const items = res.notifications ?? [];
+  const unreadCount = items.filter((n) => n.unread).length;
   const lines = ['<b>🔔 Уведомления</b>', DIVIDER, ''];
 
   if (items.length === 0) {
-    lines.push('Уведомлений пока нет.');
+    lines.push('<blockquote>Уведомлений пока нет</blockquote>');
   } else {
+    if (unreadCount > 0) lines.push(`<blockquote>Новых: ${unreadCount}</blockquote>`, '');
     for (const n of items) {
       const mark = n.unread ? '🆕 ' : '';
       lines.push(`${mark}<b>${esc(n.title)}</b>`);

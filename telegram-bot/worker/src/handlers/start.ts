@@ -8,9 +8,7 @@ import { reply } from './reply';
 const WELCOME = `<b>👋 QMods Bot</b>
 ${DIVIDER}
 
-Дополнительный канал управления вашим аккаунтом QMods — тем же самым, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.
-
-Здесь можно смотреть подписку, устройства, историю платежей и получать уведомления, не заходя на сайт.`;
+Тот же аккаунт, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a> — подписка, устройства, достижения, рефералы и оплата теперь у вас в Telegram.`;
 
 /** /start — greet, resolve link status, show the main menu. */
 export async function handleStart(ctx: Ctx): Promise<void> {
