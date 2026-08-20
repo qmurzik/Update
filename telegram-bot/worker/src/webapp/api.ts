@@ -1,5 +1,6 @@
 import type { Env } from '../config';
-import { QmodsUserApi } from '../qmodsApi';
+import { isAdmin } from '../config';
+import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
 import { checkRateLimit } from '../db';
 import { extractInitData, validateInitData } from './validate';
 
@@ -42,10 +43,13 @@ export async function handleWebAppApi(request: Request, env: Env): Promise<Respo
   }
   const action = String(body.action ?? '');
   const api = new QmodsUserApi(env);
+  const userIsAdmin = isAdmin(env, telegramId);
 
   switch (action) {
-    case 'me':
-      return json(await api.me(telegramId));
+    case 'me': {
+      const res = await api.me(telegramId);
+      return json({ ...res, is_admin: userIsAdmin });
+    }
 
     case 'link': {
       const code = String(body.code ?? '').trim().toUpperCase();
@@ -71,6 +75,71 @@ export async function handleWebAppApi(request: Request, env: Env): Promise<Respo
     case 'notifications_ack': {
       const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
       return json(await api.notificationsAck(telegramId, ids));
+    }
+
+    case 'achievements':
+      return json(await api.achievements(telegramId));
+
+    case 'referrals':
+      return json(await api.referrals(telegramId));
+
+    case 'app_release':
+      return json(await api.appRelease());
+
+    case 'review':
+      return json(await api.review(telegramId));
+
+    case 'review_add': {
+      const rating = Number(body.rating ?? 0);
+      const text = String(body.text ?? '');
+      return json(await api.reviewAdd(telegramId, rating, text));
+    }
+
+    // ============================================================
+    // Admin — gated on isAdmin(), same ADMIN_TELEGRAM_IDS as the chat bot.
+    // ============================================================
+
+    case 'admin_stats':
+    case 'admin_users':
+    case 'admin_user':
+    case 'admin_issue':
+    case 'admin_remove':
+    case 'admin_delete_user':
+    case 'admin_send_notification': {
+      if (!userIsAdmin) return json({ success: false, error: 'Forbidden' }, 403);
+      return handleAdminAction(action, body, env);
+    }
+
+    default:
+      return json({ success: false, error: 'Unknown action' }, 400);
+  }
+}
+
+async function handleAdminAction(action: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+  const adminApi = new QmodsAdminApi(env);
+
+  switch (action) {
+    case 'admin_stats':
+      return json(await adminApi.stats());
+
+    case 'admin_users':
+      return json(await adminApi.users());
+
+    case 'admin_user':
+      return json(await adminApi.user(String(body.username ?? '')));
+
+    case 'admin_issue':
+      return json(await adminApi.issue(String(body.username ?? ''), Number(body.days ?? 0)));
+
+    case 'admin_remove':
+      return json(await adminApi.remove(String(body.username ?? '')));
+
+    case 'admin_delete_user':
+      return json(await adminApi.deleteUser(String(body.username ?? '')));
+
+    case 'admin_send_notification': {
+      const target = body.target ? String(body.target) : undefined;
+      return json(await adminApi.sendNotification(String(body.title ?? ''), String(body.message ?? ''), target));
     }
 
     default:

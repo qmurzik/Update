@@ -113,6 +113,28 @@ export const APP_HTML = `<!doctype html>
   .copy-row { display: flex; gap: 8px; align-items: center; background: var(--bg2); border-radius: 10px; padding: 8px 10px; margin-top: 6px; }
   .copy-row code { flex: 1; font-size: 12px; word-break: break-all; }
   .copy-row button { flex: none; background: var(--card); border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .stat-tile { background: var(--bg2); border-radius: 10px; padding: 8px; text-align: center; }
+  .stat-tile b { display: block; font-size: 18px; }
+  .stat-tile small { color: var(--hint); font-size: 10px; }
+  .chart { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 10px; }
+  .chart-bar { flex: 1; background: linear-gradient(180deg, var(--accent), #7c3aed); border-radius: 3px 3px 0 0; min-height: 2px; }
+  input[type=search] {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);
+    background: var(--bg2); color: var(--text); font-size: 14px; margin-bottom: 8px;
+  }
+  .user-row {
+    display: flex; justify-content: space-between; align-items: center; width: 100%;
+    padding: 10px 4px; border-bottom: 1px solid var(--card-border); background: none; border-left: none; border-right: none; border-top: none;
+    color: var(--text); font-size: 13px; text-align: left; cursor: pointer;
+  }
+  .user-row:last-child { border-bottom: none; }
+  .user-list { max-height: 320px; overflow-y: auto; }
+  .admin-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--card-border); }
+  .admin-form input[type=text], .admin-form input[type=number] {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);
+    background: var(--bg2); color: var(--text); font-size: 14px; margin-bottom: 8px;
+  }
 </style>
 </head>
 <body>
@@ -142,6 +164,7 @@ export const APP_HTML = `<!doctype html>
     <div id="tab-ach" class="tabpanel hidden"></div>
     <div id="tab-pay" class="tabpanel hidden"></div>
     <div id="tab-notif" class="tabpanel hidden"></div>
+    <div id="tab-admin" class="tabpanel hidden"></div>
   </div>
 
   <div class="tabs">
@@ -151,6 +174,7 @@ export const APP_HTML = `<!doctype html>
     <button class="tab" data-tab="ach" onclick="switchTab('ach')"><span class="ic">🏆</span>Награды</button>
     <button class="tab" data-tab="pay" onclick="switchTab('pay')"><span class="ic">💳</span>Оплата</button>
     <button class="tab" data-tab="notif" onclick="switchTab('notif')"><span class="ic">🔔</span>Увед.</button>
+    <button class="tab hidden" data-tab="admin" id="adminTabBtn" onclick="switchTab('admin')"><span class="ic">🛠</span>Админ</button>
   </div>
 </div>
 
@@ -160,6 +184,7 @@ if (tg) { tg.ready(); tg.expand(); }
 var initData = tg ? tg.initData : '';
 var SUBSCRIBE_URL = '__SUBSCRIBE_URL__';
 var me = null;
+var isAdminUser = false;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -194,6 +219,8 @@ function boot() {
       return;
     }
     me = res.user;
+    isAdminUser = !!res.is_admin;
+    if (isAdminUser) document.getElementById('adminTabBtn').classList.remove('hidden');
     show('app');
     renderStatusPill();
     renderProfile();
@@ -229,7 +256,7 @@ var loaded = {};
 
 function switchTab(name) {
   haptic('light');
-  ['profile', 'sub', 'devices', 'ach', 'pay', 'notif'].forEach(function (t) {
+  ['profile', 'sub', 'devices', 'ach', 'pay', 'notif', 'admin'].forEach(function (t) {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
   });
   document.querySelectorAll('.tab').forEach(function (btn) {
@@ -243,6 +270,7 @@ function switchTab(name) {
     if (name === 'ach') renderAch();
     if (name === 'pay') renderPay();
     if (name === 'notif') renderNotif();
+    if (name === 'admin') renderAdmin();
   }
   updateMainButton(name);
 }
@@ -439,6 +467,173 @@ function renderNotif() {
   });
 }
 function markAllRead() { loaded.notif = false; switchTab('notif'); }
+
+var adminUsers = [];
+
+function renderAdmin() {
+  var el = document.getElementById('tab-admin');
+  el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  Promise.all([api('admin_stats', {}), api('admin_users', {})]).then(function (results) {
+    var sRes = results[0], uRes = results[1];
+    var stats = (sRes && sRes.stats) || {};
+    adminUsers = (uRes && uRes.users) || [];
+
+    var html = '<div class="card"><h3>Статистика</h3><div class="stat-grid">' +
+      statTile(stats.total, 'всего') +
+      statTile(stats.active, 'активных') +
+      statTile(stats.expiring, 'истекают') +
+      statTile(stats.telegram_linked, 'в Telegram') +
+      statTile(Math.round(stats.revenue || 0) + ' ₽', 'выручка') +
+      statTile(stats.payment_count, 'платежей') +
+      '</div>' + buildChart(stats.series || []) + '</div>';
+
+    html += '<div class="card"><h3>Пользователи (' + adminUsers.length + ')</h3>' +
+      '<input type="search" id="userSearch" placeholder="Поиск по нику…" oninput="filterUsers()">' +
+      '<div class="user-list" id="userList"></div></div>';
+
+    html += '<div id="userDetail"></div>';
+
+    html += '<div class="card"><h3>Рассылка всем</h3>' +
+      '<input type="text" id="bcTitle" placeholder="Заголовок">' +
+      '<textarea id="bcText" rows="3" placeholder="Текст рассылки"></textarea>' +
+      '<button class="btn primary" onclick="sendBroadcast()">📣 Отправить всем привязанным</button></div>';
+
+    el.innerHTML = html;
+    renderUserList(adminUsers);
+  });
+}
+
+function statTile(value, label) {
+  return '<div class="stat-tile"><b>' + (value == null ? 0 : value) + '</b><small>' + label + '</small></div>';
+}
+
+function buildChart(series) {
+  var last = series.slice(-14);
+  if (!last.length) return '';
+  var max = 1;
+  last.forEach(function (d) { if (d.revenue > max) max = d.revenue; });
+  var bars = last.map(function (d) {
+    var h = Math.max(2, Math.round((d.revenue / max) * 60));
+    return '<div class="chart-bar" style="height:' + h + 'px" title="' + esc(d.label) + ': ' + Math.round(d.revenue) + ' ₽"></div>';
+  }).join('');
+  return '<div class="chart">' + bars + '</div><p class="muted" style="margin-top:4px">Выручка, последние 14 дней</p>';
+}
+
+function renderUserList(list) {
+  var el = document.getElementById('userList');
+  if (!list.length) { el.innerHTML = '<p class="muted">Никого не найдено.</p>'; return; }
+  el.innerHTML = list.slice(0, 100).map(function (u) {
+    return '<button class="user-row" onclick="selectAdminUser(\\'' + esc(u.username) + '\\')">' +
+      '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) + '</span>' +
+      '<span class="muted">' + (u.active ? u.days_left + 'д' : '') + '</span></button>';
+  }).join('');
+}
+
+function filterUsers() {
+  var q = document.getElementById('userSearch').value.trim().toLowerCase();
+  var filtered = q ? adminUsers.filter(function (u) { return u.username.toLowerCase().indexOf(q) !== -1; }) : adminUsers;
+  renderUserList(filtered);
+}
+
+function selectAdminUser(username) {
+  haptic('light');
+  var el = document.getElementById('userDetail');
+  el.innerHTML = '<div class="card"><div class="skeleton"></div></div>';
+  api('admin_user', { username: username }).then(function (res) {
+    if (!res.success || !res.found) { el.innerHTML = '<div class="card"><p class="muted">Не найден.</p></div>'; return; }
+    renderUserDetail(res.user);
+  });
+}
+
+function renderUserDetail(u) {
+  var el = document.getElementById('userDetail');
+  var html = '<div class="card"><h3>' + esc(u.username) + '</h3>' +
+    row('ID', '<code>' + esc(u.id) + '</code>') +
+    row('Telegram', u.telegram_id ? '<code>' + esc(u.telegram_id) + '</code>' : 'не привязан') +
+    row('Устройство', u.device_id ? '✅' : '—') +
+    row('Тариф', esc(u.subscription.plan) + ' (' + (u.subscription.active ? '🟢' : '🔴') + ')') +
+    row('Окончание', esc(u.subscription.expires_text));
+
+  if (u.payments && u.payments.length) {
+    html += '<p class="muted" style="margin-top:8px"><b>Платежи:</b></p>';
+    u.payments.slice(0, 5).forEach(function (p) {
+      html += row(esc(p.date_text), esc(p.plan) + ' · ' + p.amount + ' ₽');
+    });
+  }
+
+  html += '<div class="admin-form">' +
+    '<input type="number" id="issueDays" placeholder="Дней продлить" min="1" max="3650">' +
+    '<button class="btn primary" onclick="adminIssue(\\'' + esc(u.username) + '\\')">➕ Продлить подписку</button>' +
+    '</div>' +
+    '<div class="admin-form">' +
+    '<textarea id="msgText" rows="2" placeholder="Сообщение пользователю"></textarea>' +
+    '<button class="btn" onclick="adminMessage(\\'' + esc(u.username) + '\\')">📨 Написать</button>' +
+    '</div>' +
+    '<div class="admin-form">' +
+    '<button class="btn" onclick="adminRemove(\\'' + esc(u.username) + '\\')">🚫 Снять подписку</button>' +
+    '<button class="btn danger" onclick="adminDelete(\\'' + esc(u.username) + '\\')">🗑 Удалить аккаунт</button>' +
+    '</div>' +
+    '<p id="adminMsg" class="muted"></p>' +
+    '</div>';
+  el.innerHTML = html;
+}
+
+function adminIssue(username) {
+  var days = Number(document.getElementById('issueDays').value || 0);
+  if (days < 1) { alert('Укажите число дней.'); return; }
+  api('admin_issue', { username: username, days: days }).then(function (res) {
+    showAdminResult(res);
+    if (res.success) selectAdminUser(username);
+  });
+}
+
+function adminRemove(username) {
+  if (!confirm('Снять подписку с ' + username + '?')) return;
+  api('admin_remove', { username: username }).then(function (res) {
+    showAdminResult(res);
+    if (res.success) selectAdminUser(username);
+  });
+}
+
+function adminDelete(username) {
+  if (!confirm('Полностью удалить аккаунт ' + username + '? Действие необратимо.')) return;
+  api('admin_delete_user', { username: username }).then(function (res) {
+    if (!res.success) { alert(res.error || 'Ошибка'); return; }
+    haptic('medium');
+    document.getElementById('userDetail').innerHTML = '';
+    loaded.admin = false;
+    switchTab('admin');
+  });
+}
+
+function adminMessage(username) {
+  var text = document.getElementById('msgText').value.trim();
+  if (text.length < 2) { alert('Введите текст сообщения.'); return; }
+  api('admin_send_notification', { title: '📨 Сообщение от администрации', message: text, target: username }).then(function (res) {
+    showAdminResult(res);
+  });
+}
+
+function showAdminResult(res) {
+  haptic(res.success ? 'medium' : 'rigid');
+  var el = document.getElementById('adminMsg');
+  if (el) el.textContent = res.success ? '✅ Готово' : '❌ ' + (res.error || 'Ошибка');
+}
+
+function sendBroadcast() {
+  var title = document.getElementById('bcTitle').value.trim();
+  var text = document.getElementById('bcText').value.trim();
+  if (!title || text.length < 2) { alert('Заполните заголовок и текст.'); return; }
+  api('admin_send_notification', { title: title, message: text }).then(function (res) {
+    if (res.success) {
+      alert('Рассылка отправлена.');
+      document.getElementById('bcTitle').value = '';
+      document.getElementById('bcText').value = '';
+    } else {
+      alert(res.error || 'Ошибка');
+    }
+  });
+}
 
 function row(k, v) {
   return '<div class="row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
