@@ -1,7 +1,7 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { buildCtx } from './context';
-import { clearState, getState } from '../db';
+import { clearState, getState, setState } from '../db';
 import type { TgUpdate } from '../telegram/types';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
@@ -98,10 +98,21 @@ async function handleMessage(update: TgUpdate, env: Env): Promise<void> {
   const ctx = buildCtx(env, chatId, telegramId);
 
   if (text.startsWith('/')) {
-    const command = text.split(/[\s@]/)[0];
+    const parts = text.split(/\s+/);
+    const command = parts[0].split('@')[0];
+    const payload = parts[1] ?? '';
     await clearState(env, chatId);
     switch (command) {
-      case '/start':
+      case '/start': {
+        // Deep link from the cabinet's "Получить код привязки" button:
+        // t.me/<bot>?start=link_<CODE> arrives here as "/start link_<CODE>".
+        const deepLink = /^link_([A-Z0-9]{10})$/.exec(payload);
+        if (deepLink) {
+          await setState(env, chatId, 'link_code');
+          return handleLinkCodeInput(ctx, deepLink[1]);
+        }
+        return handleStart(ctx);
+      }
       case '/menu':
         return handleStart(ctx);
       case '/link':
