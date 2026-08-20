@@ -1,0 +1,19 @@
+{
+  "name": "qmods-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QMods Telegram bot — Cloudflare Worker",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit",
+    "db:init": "wrangler d1 execute qmods-telegram-bot --file=./schema.sql --remote",
+    "db:init:local": "wrangler d1 execute qmods-telegram-bot --file=./schema.sql --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.86.0"
+  }
+}

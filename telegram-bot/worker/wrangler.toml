@@ -1,0 +1,34 @@
+name = "qmods-telegram-bot"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 — собственное операционное хранилище бота (НЕ пользователи QMods):
+# диалоговые состояния, рейт-лимиты, аудит-лог админ-действий.
+# Создать: `wrangler d1 create qmods-telegram-bot`, затем вставить
+# сюда полученный database_id.
+[[d1_databases]]
+binding = "DB"
+database_name = "qmods-telegram-bot"
+database_id = "b2c7e985-5e1e-42f1-a8e2-a5df52f0ec22"
+
+# Периодическая доставка отложенных уведомлений (оплата, окончание
+# подписки, новости) — см. src/index.ts::scheduled(). Раз в 5 минут
+# достаточно и укладывается в бесплатный лимит крон-триггеров.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Секреты (НЕ хранить в этом файле, задаются через `wrangler secret put`):
+#   TELEGRAM_BOT_TOKEN         — токен бота от @BotFather
+#   TELEGRAM_WEBHOOK_SECRET    — случайная строка, см. README (setWebhook secret_token)
+#   QMODS_BOT_API_TOKEN        — токен для mod/api/bot.php (пользовательский)
+#   QMODS_ADMIN_BOT_API_TOKEN  — токен для mod/admin/bot.php (админский)
+#
+# Обычные переменные (можно оставить в vars, значения не секретны):
+[vars]
+QMODS_API_BASE = "https://qmods.ru"
+QMODS_CABINET_URL = "https://qmods.ru/mod/cabinet.php"
+QMODS_SUBSCRIBE_URL = "https://qmods.ru/subscribe/"
+QMODS_SUPPORT_URL = "https://qmods.ru/mod/support.php"
+# Список Telegram ID администраторов через запятую.
+ADMIN_TELEGRAM_IDS = "5110155633"
