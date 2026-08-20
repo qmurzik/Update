@@ -2,14 +2,15 @@ import type { Ctx } from './context';
 import { mainMenu } from '../telegram/keyboards';
 import { isAdmin } from '../config';
 import { clearState } from '../db';
-import { esc } from '../util';
+import { DIVIDER, esc } from '../util';
 import { reply } from './reply';
 
-const WELCOME = `<b>👋 Добро пожаловать в QMods Bot!</b>
+const WELCOME = `<b>👋 QMods Bot</b>
+${DIVIDER}
 
-Это дополнительный канал управления вашим аккаунтом QMods — тем же самым, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.
+Дополнительный канал управления вашим аккаунтом QMods — тем же самым, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.
 
-Здесь вы можете смотреть подписку, устройства, историю платежей и получать уведомления, не заходя на сайт.`;
+Здесь можно смотреть подписку, устройства, историю платежей и получать уведомления, не заходя на сайт.`;
 
 /** /start — greet, resolve link status, show the main menu. */
 export async function handleStart(ctx: Ctx): Promise<void> {
@@ -26,9 +27,9 @@ export async function showMainMenu(ctx: Ctx, prefaceText?: string): Promise<void
   if (prefaceText) lines.push(prefaceText, '');
 
   if (linked && me.user) {
-    lines.push(`Вы вошли как <b>${esc(me.user.username)}</b>.`);
+    lines.push(`👤 Вы вошли как <b>${esc(me.user.username)}</b>`);
   } else {
-    lines.push('Аккаунт QMods ещё не привязан. Нажмите кнопку ниже, чтобы подключить бота к вашему личному кабинету.');
+    lines.push('🔒 Аккаунт QMods ещё не привязан. Нажмите кнопку ниже, чтобы подключить бота к вашему личному кабинету.');
   }
 
   await reply(ctx, lines.join('\n'), mainMenu(linked, admin));

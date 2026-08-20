@@ -1,6 +1,6 @@
 import type { Ctx } from './context';
 import { notificationsKeyboard } from '../telegram/keyboards';
-import { esc } from '../util';
+import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 
@@ -15,7 +15,7 @@ export async function showNotifications(ctx: Ctx): Promise<void> {
 
   const res = await ctx.api.notifications(ctx.telegramId);
   const items = res.notifications ?? [];
-  const lines = ['<b>🔔 Уведомления</b>', ''];
+  const lines = ['<b>🔔 Уведомления</b>', DIVIDER, ''];
 
   if (items.length === 0) {
     lines.push('Уведомлений пока нет.');

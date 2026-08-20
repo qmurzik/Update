@@ -3,6 +3,7 @@ import { confirmKeyboard, linkStartKeyboard, mainMenu } from '../telegram/keyboa
 import { esc } from '../util';
 import { checkRateLimit, clearState, setState } from '../db';
 import { showMainMenu } from './start';
+import { reply } from './reply';
 
 const LINK_RATE_MAX = 6;
 const LINK_RATE_WINDOW = 600; // 10 минут
@@ -11,18 +12,18 @@ const LINK_RATE_WINDOW = 600; // 10 минут
 export async function startLink(ctx: Ctx): Promise<void> {
   const me = await ctx.api.me(ctx.telegramId);
   if (me.linked) {
-    await ctx.tg.sendMessage(ctx.chatId, `Аккаунт уже привязан: <b>${esc(me.user?.username ?? '')}</b>.`, mainMenu(true, false));
+    await reply(ctx, `Аккаунт уже привязан: <b>${esc(me.user?.username ?? '')}</b>.`, mainMenu(true, false));
     return;
   }
 
   await setState(ctx.env, ctx.chatId, 'link_code');
   const text =
-    '<b>🔗 Привязка аккаунта</b>\n\n' +
+    '<b>🔗 Привязка аккаунта</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
     '1. Откройте личный кабинет <a href="https://qmods.ru/mod/cabinet.php">qmods.ru/mod</a>\n' +
     '2. В разделе профиля найдите блок «Telegram» и получите одноразовый код\n' +
     '3. Пришлите этот код сюда одним сообщением';
 
-  await ctx.tg.sendMessage(ctx.chatId, text, linkStartKeyboard());
+  await reply(ctx, text, linkStartKeyboard());
 }
 
 /** Handles a plain-text message while the chat is awaiting a link code. */
@@ -30,7 +31,7 @@ export async function handleLinkCodeInput(ctx: Ctx, text: string): Promise<void>
   const allowed = await checkRateLimit(ctx.env, `link:${ctx.chatId}`, LINK_RATE_MAX, LINK_RATE_WINDOW);
   if (!allowed) {
     await clearState(ctx.env, ctx.chatId);
-    await ctx.tg.sendMessage(ctx.chatId, '⏳ Слишком много попыток. Попробуйте снова через несколько минут: /link');
+    await reply(ctx, '⏳ Слишком много попыток. Попробуйте снова через несколько минут: /link');
     return;
   }
 
@@ -39,13 +40,12 @@ export async function handleLinkCodeInput(ctx: Ctx, text: string): Promise<void>
 
   if (result.success && result.linked) {
     await clearState(ctx.env, ctx.chatId);
-    await ctx.tg.sendMessage(ctx.chatId, `✅ Аккаунт <b>${esc(String(result.username ?? ''))}</b> успешно привязан!`);
-    await showMainMenu(ctx);
+    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? ''))}</b> успешно привязан!`);
     return;
   }
 
   const reason = String(result.error ?? 'Неверный код');
-  await ctx.tg.sendMessage(ctx.chatId, `❌ ${esc(reason)}. Проверьте код в кабинете и отправьте его ещё раз, либо нажмите «Отмена».`, linkStartKeyboard());
+  await reply(ctx, `❌ ${esc(reason)}. Проверьте код в кабинете и отправьте его ещё раз, либо нажмите «Отмена».`, linkStartKeyboard());
 }
 
 export async function cancelLink(ctx: Ctx): Promise<void> {
@@ -54,8 +54,8 @@ export async function cancelLink(ctx: Ctx): Promise<void> {
 }
 
 export async function askUnlink(ctx: Ctx): Promise<void> {
-  await ctx.tg.sendMessage(
-    ctx.chatId,
+  await reply(
+    ctx,
     'Отвязать Telegram от аккаунта QMods? Доступ к разделам бота будет ограничен до повторной привязки.',
     confirmKeyboard('link:unlink:yes', 'm:profile')
   );
@@ -64,7 +64,7 @@ export async function askUnlink(ctx: Ctx): Promise<void> {
 export async function confirmUnlink(ctx: Ctx): Promise<void> {
   const result = await ctx.api.unlink(ctx.telegramId);
   if (!result.success) {
-    await ctx.tg.sendMessage(ctx.chatId, `Не удалось отвязать аккаунт: ${esc(String(result.error ?? 'ошибка'))}`);
+    await reply(ctx, `Не удалось отвязать аккаунт: ${esc(String(result.error ?? 'ошибка'))}`);
     return;
   }
   await showMainMenu(ctx, '🔓 Telegram отвязан от аккаунта.');

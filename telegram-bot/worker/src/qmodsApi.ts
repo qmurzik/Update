@@ -113,6 +113,18 @@ export interface AdminUserCard {
   payments: Array<{ plan: string; amount: number; date_text: string }>;
 }
 
+export interface AdminUserSummary {
+  id: string;
+  username: string;
+  plan: string;
+  active: boolean;
+  days_left: number;
+  expires_text: string;
+  telegram_id: string;
+  device_id: string;
+  created_text: string;
+}
+
 /** Client for mod/admin/bot.php — admin-only actions, separate token. */
 export class QmodsAdminApi {
   private readonly url: string;
@@ -125,6 +137,10 @@ export class QmodsAdminApi {
 
   stats() {
     return callApi<{ stats: Record<string, unknown> }>(this.url, this.token, 'stats');
+  }
+
+  users() {
+    return callApi<{ users: AdminUserSummary[]; count: number }>(this.url, this.token, 'users');
   }
 
   user(username: string) {

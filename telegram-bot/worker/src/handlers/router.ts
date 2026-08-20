@@ -25,7 +25,9 @@ import {
   handleMessageInput,
   handleSearchInput,
   showAdminMenu,
+  showCurrentCard,
   showStats,
+  showUsersList,
 } from './admin';
 import { reply } from './reply';
 
@@ -54,7 +56,25 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'adm:del:ask': askDelete,
   'adm:del:yes': confirmDelete,
   'adm:broadcast': askBroadcast,
+  'adm:card': showCurrentCard,
 };
+
+/**
+ * Callback data carrying a dynamic suffix (page number, username) — handled
+ * by prefix rather than an exact CALLBACK_HANDLERS entry. Checked only after
+ * an exact-match lookup misses.
+ */
+function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>) => Promise<void>) | null {
+  if (data.startsWith('adm:users:')) {
+    const page = parseInt(data.slice('adm:users:'.length), 10);
+    return (ctx) => showUsersList(ctx, Number.isFinite(page) ? page : 0);
+  }
+  if (data.startsWith('adm:u:')) {
+    const username = data.slice('adm:u:'.length);
+    return (ctx) => handleSearchInput(ctx, username);
+  }
+  return null;
+}
 
 // Text-input states only reachable from an admin flow — double-checked here
 // in case D1 state ever outlives an admin's access being revoked.
@@ -131,7 +151,7 @@ async function handleCallback(update: TgUpdate, env: Env): Promise<void> {
   const ctx = buildCtx(env, chatId, telegramId, { callbackQueryId: cq.id, messageId: cq.message?.message_id });
   const data = cq.data ?? '';
 
-  const handler = CALLBACK_HANDLERS[data];
+  const handler = CALLBACK_HANDLERS[data] ?? matchDynamicCallback(data);
   if (!handler) {
     await ctx.tg.answerCallbackQuery(cq.id);
     return;

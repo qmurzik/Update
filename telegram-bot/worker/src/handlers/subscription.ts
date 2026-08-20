@@ -1,6 +1,6 @@
 import type { Ctx } from './context';
 import { subscriptionKeyboard } from '../telegram/keyboards';
-import { daysRu, esc } from '../util';
+import { DIVIDER, daysRu, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 
@@ -9,7 +9,7 @@ export async function showSubscription(ctx: Ctx): Promise<void> {
   if (!(await requireLinked(ctx, me))) return;
 
   const sub = me.user!.subscription;
-  const lines = ['<b>⭐ Моя подписка</b>', ''];
+  const lines = ['<b>⭐ Моя подписка</b>', DIVIDER, ''];
 
   if (!sub.plan || sub.plan === 'none') {
     lines.push('У вас нет активной подписки.');

@@ -1,6 +1,6 @@
 import type { Ctx } from './context';
 import { profileKeyboard } from '../telegram/keyboards';
-import { esc } from '../util';
+import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 
@@ -11,6 +11,7 @@ export async function showProfile(ctx: Ctx): Promise<void> {
   const u = me.user!;
   const text = [
     '<b>👤 Мой профиль</b>',
+    DIVIDER,
     '',
     `Логин: <b>${esc(u.username)}</b>`,
     `ID пользователя: <code>${esc(u.id)}</code>`,
