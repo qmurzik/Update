@@ -37,13 +37,18 @@ class VideoViewModel @Inject constructor(
         }
     }
 
-    fun search(query: String) = viewModelScope.launch {
-        if (query.isBlank()) return@launch load()
-        _state.value = _state.value.copy(isLoading = true)
-        when (val result = repository.search(query)) {
-            is Resource.Success -> _state.value = _state.value.copy(isLoading = false, videos = result.data)
-            is Resource.Error -> _state.value = _state.value.copy(isLoading = false, error = result.message)
-            Resource.Loading -> Unit
+    fun search(query: String) {
+        if (query.isBlank()) {
+            load()
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true)
+            when (val result = repository.search(query)) {
+                is Resource.Success -> _state.value = _state.value.copy(isLoading = false, videos = result.data)
+                is Resource.Error -> _state.value = _state.value.copy(isLoading = false, error = result.message)
+                Resource.Loading -> Unit
+            }
         }
     }
 }

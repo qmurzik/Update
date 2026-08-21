@@ -58,12 +58,17 @@ class MusicViewModel @Inject constructor(
         }
     }
 
-    fun search(query: String) = viewModelScope.launch {
-        if (query.isBlank()) return@launch load()
-        when (val result = repository.search(query)) {
-            is MusicResult.Available -> _state.value = _state.value.copy(screenState = MusicScreenState.AVAILABLE, tracks = result.tracks)
-            MusicResult.Unavailable -> _state.value = _state.value.copy(screenState = MusicScreenState.UNAVAILABLE)
-            is MusicResult.Error -> _state.value = _state.value.copy(screenState = MusicScreenState.ERROR, errorMessage = result.message)
+    fun search(query: String) {
+        if (query.isBlank()) {
+            load()
+            return
+        }
+        viewModelScope.launch {
+            when (val result = repository.search(query)) {
+                is MusicResult.Available -> _state.value = _state.value.copy(screenState = MusicScreenState.AVAILABLE, tracks = result.tracks)
+                MusicResult.Unavailable -> _state.value = _state.value.copy(screenState = MusicScreenState.UNAVAILABLE)
+                is MusicResult.Error -> _state.value = _state.value.copy(screenState = MusicScreenState.ERROR, errorMessage = result.message)
+            }
         }
     }
 

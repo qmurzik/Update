@@ -63,7 +63,7 @@ class LongPollClient @Inject constructor(
             val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: continue
 
             // failed: {"failed": 1|2|3} means our key/ts expired — re-fetch a fresh server and retry.
-            root["failed"]?.let {
+            if (root["failed"] != null) {
                 val fresh = api.getLongPollServer(needPts = 1, lpVersion = 3).response
                 if (fresh == null) return@flow
                 key = fresh.key; server = fresh.server; ts = fresh.ts
