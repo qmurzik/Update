@@ -8,7 +8,7 @@ import retrofit2.http.Field
 import retrofit2.http.Query
 
 /**
- * Thin 1:1 mapping over the official VK API (https://dev.vk.com/method/*). [com.qvk.app.core.network.VkAuthInterceptor]
+ * Thin 1:1 mapping over the official VK API (https://dev.vk.com/method). [com.qvk.app.core.network.VkAuthInterceptor]
  * appends `access_token`, `v` and `lang` to every request, so only method-specific params live here.
  * Reads use GET, mutations use POST — both are accepted by VK, POST just avoids stuffing long
  * message/attachment strings into a query string.
