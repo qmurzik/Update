@@ -66,6 +66,56 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
                     + "transition-duration:0.001s !important;scroll-behavior:auto !important;}';"
                     + "document.head.appendChild(s);})();";
 
+    // Hides TikTok's own browser-page chrome (top nav/tabs, "open in app" and
+    // cookie banners, install prompts) and strips the tells that make a page
+    // feel like a webpage (tap highlight, text-selection callout, scrollbars)
+    // so only the video feed itself — which is genuinely TikTok's own,
+    // fully working UI — remains visible under our native shell.
+    private static final String CHROME_HIDER_JS =
+            "(function(){"
+                    + "if(window.__neotokHider)return;window.__neotokHider=true;"
+                    + "var s=document.createElement('style');"
+                    + "s.innerHTML="
+                    + "\"*{-webkit-tap-highlight-color:transparent!important;"
+                    + "-webkit-touch-callout:none!important;}"
+                    + "body{-webkit-user-select:none!important;overscroll-behavior:none!important;}"
+                    + "*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}"
+                    + "header,nav,[data-e2e='top-nav'],[data-e2e='nav-login-button'],"
+                    + "[data-e2e='nav-more'],[data-e2e='app-download-card'],"
+                    + "[data-e2e='download-card'],[data-e2e='browser-modal'],"
+                    + "[data-e2e='open-app-modal'],[class*='DivBannerContainer'],"
+                    + "[class*='DivAppBanner'],[id*='cookie-banner'],"
+                    + "[class*='CookieBanner']{display:none!important;}\";"
+                    + "document.head.appendChild(s);"
+                    + "function looksLikeBanner(el){"
+                    + "if(!el||!el.textContent)return false;"
+                    + "var t=el.textContent.trim().toLowerCase();"
+                    + "if(t.length===0||t.length>200)return false;"
+                    + "return t.indexOf('open in the tiktok app')>=0||t.indexOf('get the app')>=0||"
+                    + "t.indexOf('continue in browser')>=0||t.indexOf('use app')>=0||"
+                    + "t.indexOf('accept all')>=0||t.indexOf('open app')>=0;"
+                    + "}"
+                    + "function killBanners(){"
+                    + "try{"
+                    + "var all=document.querySelectorAll('div,section,aside');"
+                    + "for(var i=0;i<all.length;i++){"
+                    + "var el=all[i];"
+                    + "if(!looksLikeBanner(el))continue;"
+                    + "var cs=window.getComputedStyle(el);"
+                    + "if(cs.position==='fixed'||cs.position==='sticky'){"
+                    + "el.style.setProperty('display','none','important');"
+                    + "}"
+                    + "}"
+                    + "}catch(e){}"
+                    + "}"
+                    + "killBanners();"
+                    + "var t=null;"
+                    + "var mo=new MutationObserver(function(){"
+                    + "if(t)return;t=setTimeout(function(){t=null;killBanners();},500);"
+                    + "});"
+                    + "mo.observe(document.body,{childList:true,subtree:true});"
+                    + "})();";
+
     private static final long MIN_SPLASH_MS = 500;
     private static final int SCROLL_HIDE_THRESHOLD = 12;
 
@@ -301,6 +351,20 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         settings.setUserAgentString(prefs.isDesktopSite() ? DESKTOP_UA : MOBILE_UA);
         appliedUserAgent = prefs.isDesktopSite() ? DESKTOP_UA : MOBILE_UA;
 
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setBackgroundColor(getResources().getColor(R.color.bg_root));
+        webView.setLongClickable(false);
+        webView.setHapticFeedbackEnabled(false);
+        webView.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                return true;
+            }
+        });
+
         WebView.setWebContentsDebuggingEnabled(true);
 
         CookieManager cookieManager = CookieManager.getInstance();
@@ -381,11 +445,13 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     public void onPageLoadStarted() {
         progressBar.setVisibility(View.VISIBLE);
         progressBar.setProgress(0);
+        webView.evaluateJavascript(CHROME_HIDER_JS, null);
     }
 
     @Override
     public void onPageLoadFinished() {
         progressBar.setVisibility(View.GONE);
+        webView.evaluateJavascript(CHROME_HIDER_JS, null);
         if (prefs.isLiteMode()) {
             webView.evaluateJavascript(LITE_MODE_CSS, null);
         }

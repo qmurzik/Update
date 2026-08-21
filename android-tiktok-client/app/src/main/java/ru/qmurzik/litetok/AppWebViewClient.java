@@ -40,6 +40,15 @@ final class AppWebViewClient extends WebViewClient {
         this.callback = callback;
     }
 
+    private static boolean isSafeExternalScheme(String scheme) {
+        for (String candidate : EXTERNAL_SAFE_SCHEMES) {
+            if (candidate.equalsIgnoreCase(scheme)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isExternalAuthHost(String host) {
         if (host == null) {
             return false;
@@ -57,13 +66,21 @@ final class AppWebViewClient extends WebViewClient {
         return handleUri(Uri.parse(url));
     }
 
+    private static final String[] EXTERNAL_SAFE_SCHEMES = {"mailto", "tel", "sms"};
+
     private boolean handleUri(Uri uri) {
         String scheme = uri.getScheme();
         if (scheme != null && !scheme.equals("http") && !scheme.equals("https")) {
-            try {
-                context.startActivity(new Intent(Intent.ACTION_VIEW, uri));
-            } catch (ActivityNotFoundException ignored) {
-                // No app can handle this scheme; nothing more we can do.
+            // TikTok's mobile web tries to deep-link into the real TikTok app
+            // (intent://, its own custom scheme, etc.) when it's installed;
+            // swallowing everything except a small safe list keeps the user
+            // inside this app instead of bouncing them out to the real one.
+            if (isSafeExternalScheme(scheme)) {
+                try {
+                    context.startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                } catch (ActivityNotFoundException ignored) {
+                    // No app can handle this scheme; nothing more we can do.
+                }
             }
             return true;
         }
