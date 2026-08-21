@@ -14,12 +14,6 @@
     <string name="action_reload">Обновить</string>
     <string name="action_settings">Настройки</string>
 
-    <string name="nav_home">Главная</string>
-    <string name="nav_discover">Поиск</string>
-    <string name="nav_upload">Создать</string>
-    <string name="nav_inbox">Входящие</string>
-    <string name="nav_profile">Профиль</string>
-
     <string name="toast_press_back_again">Нажмите ещё раз, чтобы выйти</string>
 
     <string name="offline_title">Нет подключения к интернету</string>

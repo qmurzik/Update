@@ -9,7 +9,6 @@ import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -20,14 +19,12 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.widget.ImageView;
 import android.widget.PopupWindow;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -43,16 +40,6 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     private static final int REQUEST_FILE_CHOOSER = 200;
 
     private static final String HOME_URL = "https://www.tiktok.com/foryou";
-    private static final String DISCOVER_URL = "https://www.tiktok.com/explore";
-    private static final String UPLOAD_URL = "https://www.tiktok.com/upload";
-    private static final String INBOX_URL = "https://www.tiktok.com/messages";
-    private static final String PROFILE_JS =
-            "(function(){"
-                    + "var el=document.querySelector('[data-e2e=\"profile-icon\"]')"
-                    + "||document.querySelector('[data-e2e=\"nav-profile\"]')"
-                    + "||document.querySelector('header a[href^=\"/@\"]');"
-                    + "if(el){el.click();}else{location.href='https://www.tiktok.com/setting';}"
-                    + "})();";
 
     private static final String MOBILE_UA =
             "Mozilla/5.0 (Linux; Android 13; K) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -66,83 +53,81 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
                     + "transition-duration:0.001s !important;scroll-behavior:auto !important;}';"
                     + "document.head.appendChild(s);})();";
 
-    // Hides TikTok's own browser-page chrome (top nav/tabs, "open in app" and
-    // cookie banners, install prompts) and strips the tells that make a page
-    // feel like a webpage (tap highlight, text-selection callout, scrollbars)
-    // so only the video feed itself — which is genuinely TikTok's own,
-    // fully working UI — remains visible under our native shell.
+    // Hides TikTok's own browser-page chrome — its top bar (logo/hamburger/
+    // "open app" banner/search), install and cookie prompts — while leaving
+    // TikTok's own bottom tab bar alone (it already looks and behaves like a
+    // native app's, and duplicating it natively caused a double nav bar).
+    // TikTok's markup uses plain <div>s with hashed class names rather than
+    // semantic tags, and its banner text is localized, so instead of a fixed
+    // selector list this hides (a) any fixed/sticky element pinned to the
+    // very top and shaped like a bar, regardless of tag/class/language, and
+    // (b) any shallow element whose own text matches a banner phrase in a
+    // few languages. Both checks are scoped to the top few DOM levels so
+    // real feed/caption content is never touched. Also strips the tells that
+    // make a page read as a webpage (tap highlight, selection callout,
+    // scrollbars).
     private static final String CHROME_HIDER_JS =
             "(function(){"
                     + "if(window.__neotokHider)return;window.__neotokHider=true;"
-                    + "var s=document.createElement('style');"
-                    + "s.innerHTML="
+                    + "var style=document.createElement('style');"
+                    + "style.innerHTML="
                     + "\"*{-webkit-tap-highlight-color:transparent!important;"
                     + "-webkit-touch-callout:none!important;}"
                     + "body{-webkit-user-select:none!important;overscroll-behavior:none!important;}"
-                    + "*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}"
-                    + "header,nav,[data-e2e='top-nav'],[data-e2e='nav-login-button'],"
-                    + "[data-e2e='nav-more'],[data-e2e='app-download-card'],"
-                    + "[data-e2e='download-card'],[data-e2e='browser-modal'],"
-                    + "[data-e2e='open-app-modal'],[class*='DivBannerContainer'],"
-                    + "[class*='DivAppBanner'],[id*='cookie-banner'],"
-                    + "[class*='CookieBanner']{display:none!important;}\";"
-                    + "document.head.appendChild(s);"
-                    + "function looksLikeBanner(el){"
+                    + "*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}\";"
+                    + "document.head.appendChild(style);"
+                    + "var BANNER_WORDS=['open in the tiktok app','get the app','continue in browser',"
+                    + "'use app','accept all','open app','открыть приложение','открыть в приложении',"
+                    + "'продолжить в браузере','использовать приложение','принять все',"
+                    + "'установить приложение','скачать приложение'];"
+                    + "function hasBannerText(el){"
                     + "if(!el||!el.textContent)return false;"
                     + "var t=el.textContent.trim().toLowerCase();"
                     + "if(t.length===0||t.length>200)return false;"
-                    + "return t.indexOf('open in the tiktok app')>=0||t.indexOf('get the app')>=0||"
-                    + "t.indexOf('continue in browser')>=0||t.indexOf('use app')>=0||"
-                    + "t.indexOf('accept all')>=0||t.indexOf('open app')>=0;"
+                    + "for(var i=0;i<BANNER_WORDS.length;i++){if(t.indexOf(BANNER_WORDS[i])>=0)return true;}"
+                    + "return false;"
                     + "}"
-                    + "function killBanners(){"
+                    + "function sweep(){"
                     + "try{"
-                    + "var all=document.querySelectorAll('div,section,aside');"
-                    + "for(var i=0;i<all.length;i++){"
-                    + "var el=all[i];"
-                    + "if(!looksLikeBanner(el))continue;"
+                    + "var candidates=document.querySelectorAll('body>*,body>*>*,body>*>*>*,body>*>*>*>*');"
+                    + "for(var i=0;i<candidates.length;i++){"
+                    + "var el=candidates[i];"
                     + "var cs=window.getComputedStyle(el);"
+                    + "if(cs.display==='none')continue;"
+                    + "var isFixedTopBar=false;"
                     + "if(cs.position==='fixed'||cs.position==='sticky'){"
+                    + "var rect=el.getBoundingClientRect();"
+                    + "if(rect.top<=12&&rect.height>0&&rect.height<=96&&rect.width>=window.innerWidth*0.5){"
+                    + "isFixedTopBar=true;"
+                    + "}"
+                    + "}"
+                    + "if(isFixedTopBar||hasBannerText(el)){"
                     + "el.style.setProperty('display','none','important');"
                     + "}"
                     + "}"
                     + "}catch(e){}"
                     + "}"
-                    + "killBanners();"
-                    + "var t=null;"
+                    + "sweep();"
+                    + "var timer=null;"
                     + "var mo=new MutationObserver(function(){"
-                    + "if(t)return;t=setTimeout(function(){t=null;killBanners();},500);"
+                    + "if(timer)return;timer=setTimeout(function(){timer=null;sweep();},500);"
                     + "});"
                     + "mo.observe(document.body,{childList:true,subtree:true});"
                     + "})();";
 
     private static final long MIN_SPLASH_MS = 500;
-    private static final int SCROLL_HIDE_THRESHOLD = 12;
 
     private WebView webView;
     private ProgressBar progressBar;
     private View offlineOverlay;
     private View splashOverlay;
-    private View bottomNav;
     private TextView btnMenu;
     private Prefs prefs;
-
-    private View navHome;
-    private View navDiscover;
-    private View navUpload;
-    private View navInbox;
-    private View navProfile;
-    private ImageView iconHome;
-    private ImageView iconDiscover;
-    private ImageView iconInbox;
-    private ImageView iconProfile;
 
     private ValueCallback<Uri[]> filePathCallback;
     private long lastBackPressAt;
     private long splashShownAt;
     private boolean splashDismissed;
-    private boolean chromeHidden;
-    private int selectedTab = 0;
 
     private DownloadManager.Request pendingDownload;
     private String appliedUserAgent;
@@ -150,15 +135,13 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setupEdgeToEdge();
+        getWindow().setStatusBarColor(getResources().getColor(R.color.bg_root));
         setContentView(R.layout.activity_main);
 
         prefs = new Prefs(this);
         bindViews();
-        applyWindowInsets();
         setupWebView();
         setupNavigation();
-        updateTabHighlight();
 
         splashShownAt = System.currentTimeMillis();
         animateSplashIn();
@@ -168,44 +151,12 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         }
     }
 
-    private void setupEdgeToEdge() {
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
-    }
-
     private void bindViews() {
         webView = (WebView) findViewById(R.id.webview);
         progressBar = (ProgressBar) findViewById(R.id.progress_bar);
         offlineOverlay = findViewById(R.id.offline_overlay);
         splashOverlay = findViewById(R.id.splash_overlay);
-        bottomNav = findViewById(R.id.bottom_nav);
         btnMenu = (TextView) findViewById(R.id.btn_menu);
-
-        navHome = findViewById(R.id.nav_home);
-        navDiscover = findViewById(R.id.nav_discover);
-        navUpload = findViewById(R.id.nav_upload);
-        navInbox = findViewById(R.id.nav_inbox);
-        navProfile = findViewById(R.id.nav_profile);
-        iconHome = (ImageView) findViewById(R.id.icon_home);
-        iconDiscover = (ImageView) findViewById(R.id.icon_discover);
-        iconInbox = (ImageView) findViewById(R.id.icon_inbox);
-        iconProfile = (ImageView) findViewById(R.id.icon_profile);
-    }
-
-    private void applyWindowInsets() {
-        findViewById(android.R.id.content).setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-            @Override
-            public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
-                int top = insets.getSystemWindowInsetTop();
-                int bottom = insets.getSystemWindowInsetBottom();
-                btnMenu.setTranslationY(top + dp(4));
-                ViewGroup.MarginLayoutParams navParams = (ViewGroup.MarginLayoutParams) bottomNav.getLayoutParams();
-                navParams.bottomMargin = dp(16) + bottom;
-                bottomNav.setLayoutParams(navParams);
-                return insets;
-            }
-        });
     }
 
     private int dp(int value) {
@@ -213,59 +164,12 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     }
 
     private void setupNavigation() {
-        View.OnClickListener tabListener = new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (v == navHome) selectTab(0);
-                else if (v == navDiscover) selectTab(1);
-                else if (v == navUpload) webView.loadUrl(UPLOAD_URL);
-                else if (v == navInbox) selectTab(3);
-                else if (v == navProfile) selectTab(4);
-            }
-        };
-        navHome.setOnClickListener(tabListener);
-        navDiscover.setOnClickListener(tabListener);
-        navUpload.setOnClickListener(tabListener);
-        navInbox.setOnClickListener(tabListener);
-        navProfile.setOnClickListener(tabListener);
-
         btnMenu.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showQuickMenu();
             }
         });
-    }
-
-    private void selectTab(int index) {
-        selectedTab = index;
-        updateTabHighlight();
-        switch (index) {
-            case 0: webView.loadUrl(HOME_URL); break;
-            case 1: webView.loadUrl(DISCOVER_URL); break;
-            case 3: webView.loadUrl(INBOX_URL); break;
-            case 4: webView.evaluateJavascript(PROFILE_JS, null); break;
-            default: break;
-        }
-    }
-
-    private void updateTabHighlight() {
-        int active = getResources().getColor(R.color.accent);
-        int inactive = getResources().getColor(R.color.icon_tint_inactive);
-        iconHome.setColorFilter(selectedTab == 0 ? active : inactive);
-        iconDiscover.setColorFilter(selectedTab == 1 ? active : inactive);
-        iconInbox.setColorFilter(selectedTab == 3 ? active : inactive);
-        iconProfile.setColorFilter(selectedTab == 4 ? active : inactive);
-
-        setLabelColor(R.id.label_home, selectedTab == 0);
-        setLabelColor(R.id.label_discover, selectedTab == 1);
-        setLabelColor(R.id.label_inbox, selectedTab == 3);
-        setLabelColor(R.id.label_profile, selectedTab == 4);
-    }
-
-    private void setLabelColor(int id, boolean active) {
-        TextView label = (TextView) findViewById(id);
-        label.setTextColor(getResources().getColor(active ? R.color.accent : R.color.icon_tint_inactive));
     }
 
     private void showQuickMenu() {
@@ -380,25 +284,6 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
                 startDownload(url, userAgent, contentDisposition, mimeType);
             }
         });
-        webView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
-            @Override
-            public void onScrollChange(View v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                int dy = scrollY - oldScrollY;
-                if (dy > SCROLL_HIDE_THRESHOLD && scrollY > dp(80)) {
-                    setChromeHidden(true);
-                } else if (dy < -SCROLL_HIDE_THRESHOLD || scrollY < dp(80)) {
-                    setChromeHidden(false);
-                }
-            }
-        });
-    }
-
-    private void setChromeHidden(boolean hidden) {
-        if (hidden == chromeHidden) return;
-        chromeHidden = hidden;
-        float navTarget = hidden ? bottomNav.getHeight() + dp(32) : 0f;
-        bottomNav.animate().translationY(navTarget).setDuration(220).start();
-        btnMenu.animate().alpha(hidden ? 0f : 1f).setDuration(220).start();
     }
 
     private void loadStartPage() {
