@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LiteTok</string>
+    <string name="settings_title">Настройки</string>
+
+    <string name="glyph_back">‹</string>
+    <string name="glyph_forward">›</string>
+    <string name="glyph_reload">⟳</string>
+    <string name="glyph_menu">⋮</string>
+    <string name="glyph_offline">⚠</string>
+
+    <string name="action_back">Назад</string>
+    <string name="action_forward">Вперёд</string>
+    <string name="action_reload">Обновить</string>
+    <string name="action_settings">Настройки</string>
+
+    <string name="toast_press_back_again">Нажмите ещё раз, чтобы выйти</string>
+
+    <string name="offline_title">Нет подключения к интернету</string>
+    <string name="offline_message">Проверьте соединение с сетью и повторите попытку.</string>
+    <string name="offline_retry">Повторить</string>
+
+    <string name="permission_denied_camera">Доступ к камере отклонён. Некоторые функции записи видео будут недоступны.</string>
+    <string name="permission_denied_storage">Доступ к хранилищу отклонён. Скачивание файлов будет недоступно.</string>
+
+    <string name="download_started">Загрузка начата</string>
+
+    <string name="settings_lite_mode">Режим для слабых устройств</string>
+    <string name="settings_lite_mode_summary">Отключает CSS-анимации на странице и сообщает сайту заголовок Save-Data — экономит заряд батареи и, по возможности, трафик</string>
+
+    <string name="settings_desktop_site">Версия для ПК</string>
+    <string name="settings_desktop_site_summary">Открывать полную веб-версию вместо мобильной</string>
+
+    <string name="settings_text_zoom">Масштаб интерфейса</string>
+
+    <string name="settings_clear_data">Выйти и очистить данные</string>
+    <string name="settings_clear_data_summary">Удаляет cookies, кэш и данные авторизации</string>
+    <string name="settings_clear_data_done">Данные очищены, выполнен выход из аккаунта</string>
+
+    <string name="settings_about">О приложении</string>
+    <string name="settings_about_text">LiteTok — неофициальный облегчённый клиент мобильной веб-версии TikTok для слабых Android-устройств. Приложение не аффилировано с TikTok/ByteDance, не хранит и не передаёт ваши данные на сторонние серверы: авторизация и весь контент загружаются напрямую с сайта tiktok.com внутри защищённого WebView.</string>
+
+    <string name="settings_close">Закрыть</string>
+</resources>

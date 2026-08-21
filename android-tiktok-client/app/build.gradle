@@ -1,0 +1,27 @@
+apply plugin: "com.android.application"
+
+android {
+    namespace "ru.qmurzik.litetok"
+    compileSdkVersion 23
+    buildToolsVersion "29.0.3"
+
+    defaultConfig {
+        applicationId "ru.qmurzik.litetok"
+        minSdkVersion 21
+        targetSdkVersion 23
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+}

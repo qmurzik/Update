@@ -1,0 +1,8 @@
+build-offline/
+*.apk
+*.apk.idsig
+.gradle/
+build/
+local.properties
+*.iml
+.idea/

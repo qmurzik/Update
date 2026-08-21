@@ -1,0 +1,2 @@
+rootProject.name = "LiteTok"
+include ":app"
