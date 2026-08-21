@@ -1,5 +1,16 @@
+import type { Env } from './config';
+
 /** Thin divider under a bolded section header, e.g. `<b>Title</b>\n${DIVIDER}\n\n...`. */
 export const DIVIDER = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
+
+/**
+ * URL of one of the mascot (Kira) images served from worker/public/img/ via
+ * Workers Assets. Null when PUBLIC_URL isn't configured yet — callers should
+ * skip sending/rendering the image rather than send a broken link.
+ */
+export function kiraImage(env: Env, filename: string): string | null {
+  return env.PUBLIC_URL ? `${env.PUBLIC_URL}/img/${filename}` : null;
+}
 
 /** Escape user-controlled text before embedding it into an HTML-mode Telegram message. */
 export function esc(text: string): string {

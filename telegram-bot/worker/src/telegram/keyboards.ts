@@ -3,8 +3,8 @@ import type { InlineKeyboard } from './types';
 
 export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = [];
-  const webAppButton: InlineKeyboard[number] | null = env.WEBAPP_URL
-    ? [{ text: '🖥 Открыть в Mini App', web_app: { url: env.WEBAPP_URL } }]
+  const webAppButton: InlineKeyboard[number] | null = env.PUBLIC_URL
+    ? [{ text: '🖥 Открыть в Mini App', web_app: { url: `${env.PUBLIC_URL}/app` } }]
     : null;
 
   if (!linked) {

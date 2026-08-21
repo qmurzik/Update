@@ -14,12 +14,14 @@ export interface Env {
   QMODS_SUPPORT_URL: string;
   ADMIN_TELEGRAM_IDS: string;
   /**
-   * Full https URL of this Worker's own /app route, e.g.
-   * "https://qmods-telegram-bot.<account>.workers.dev/app". Only known
-   * after the first deploy, so it's optional — leave empty to hide the
-   * Mini App button until it's set.
+   * This Worker's own public origin, e.g.
+   * "https://qmods-telegram-bot.<account>.workers.dev" (no trailing slash,
+   * no path). Only known after the first deploy, so it's optional — leave
+   * empty to hide the Mini App button and skip sending Kira's photos until
+   * it's set. Powers both the Mini App URL (`${PUBLIC_URL}/app`) and the
+   * mascot image URLs (`${PUBLIC_URL}/img/...`, served by Workers Assets).
    */
-  WEBAPP_URL: string;
+  PUBLIC_URL: string;
 }
 
 export function adminIds(env: Env): string[] {

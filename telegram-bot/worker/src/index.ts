@@ -3,7 +3,7 @@ import { verifyWebhookSecret } from './security';
 import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi } from './qmodsApi';
-import { esc } from './util';
+import { esc, kiraImage } from './util';
 import type { TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
@@ -25,9 +25,32 @@ export default {
       return new Response('Webhook registered', { status: 200 });
     }
 
+    // One-off: sets the bot's Telegram-side name/description to Kira's
+    // persona (setMyName/setMyDescription/setMyShortDescription — there is
+    // no Bot API method for the bot's own avatar, that's still @BotFather's
+    // /setuserpic). Same gating pattern as /setup-webhook.
+    if (url.pathname === '/setup-profile' && request.method === 'GET') {
+      if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      const tg = new TelegramClient(env);
+      await tg.setPersona(
+        'Кира — QMods Bot',
+        'Привет! Я Кира 🖤 Помогу привязать аккаунт QMods, буду следить за подпиской, устройствами и уведомлениями — прямо здесь, в Telegram, без захода на сайт.\n\nНажмите Start, чтобы начать.',
+        'Кира — твой помощник QMods в Telegram: подписка, устройства, достижения 🖤'
+      );
+      return new Response('Profile updated. Аватар всё ещё нужно задать вручную через @BotFather -> /setuserpic.', { status: 200 });
+    }
+
     // Mini App — static page + its one JSON API endpoint.
     if (url.pathname === '/app' && request.method === 'GET') {
-      const html = APP_HTML.replace('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL);
+      // about:blank when PUBLIC_URL isn't set yet — the onerror handlers on
+      // each <img> hide it cleanly rather than showing a broken-image icon.
+      const img = (name: string) => kiraImage(env, name) ?? 'about:blank';
+      const html = APP_HTML.replace('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
+        .replace('__KIRA_HERO__', img('kira-hero.webp'))
+        .replace('__KIRA_LOADING__', img('kira-loading.webp'))
+        .replace('__KIRA_EMPTY__', img('kira-empty.webp'));
       return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
     if (url.pathname === '/app/api') {

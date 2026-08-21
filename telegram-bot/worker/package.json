@@ -12,8 +12,8 @@
     "db:init:local": "wrangler d1 execute qmods-telegram-bot --file=./schema.sql --local"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241106.0",
+    "@cloudflare/workers-types": "^5.20260820.1",
     "typescript": "^5.6.3",
-    "wrangler": "^3.86.0"
+    "wrangler": "^4.4.0"
   }
 }

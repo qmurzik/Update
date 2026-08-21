@@ -2,17 +2,28 @@ import type { Ctx } from './context';
 import { mainMenu } from '../telegram/keyboards';
 import { isAdmin } from '../config';
 import { clearState } from '../db';
-import { DIVIDER, esc } from '../util';
+import { DIVIDER, esc, kiraImage } from '../util';
 import { reply } from './reply';
 
-const WELCOME = `<b>👋 QMods Bot</b>
+const KIRA_INTRO =
+  'Привет! Я Кира 🖤 Помогаю с QMods прямо здесь, в Telegram — подписка, устройства, достижения и уведомления под рукой, без захода на сайт.';
+
+const WELCOME = `<b>Чем займёмся?</b>
 ${DIVIDER}
 
-Тот же аккаунт, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a> — подписка, устройства, достижения, рефералы и оплата теперь у вас в Telegram.`;
+Аккаунт тот же, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.`;
 
-/** /start — greet, resolve link status, show the main menu. */
+/** /start — Kira's intro photo (once), then greet, resolve link status, show the main menu. */
 export async function handleStart(ctx: Ctx): Promise<void> {
   await clearState(ctx.env, ctx.chatId);
+
+  const photoUrl = kiraImage(ctx.env, 'kira-hero.jpg');
+  if (photoUrl) {
+    // Отдельным сообщением: если editMessageText потом захочет отредактировать
+    // текстовое меню, оно не должно зависеть от того, есть фото или нет.
+    await ctx.tg.sendPhoto(ctx.chatId, photoUrl, KIRA_INTRO).catch(() => undefined);
+  }
+
   await showMainMenu(ctx, WELCOME);
 }
 

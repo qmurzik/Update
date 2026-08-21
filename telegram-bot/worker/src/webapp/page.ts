@@ -135,16 +135,20 @@ export const APP_HTML = `<!doctype html>
     width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-border);
     background: var(--bg2); color: var(--text); font-size: 14px; margin-bottom: 8px;
   }
+  .mascot { width: 190px; max-width: 62vw; margin-bottom: 14px; filter: drop-shadow(0 10px 28px rgba(124,58,237,.35)); }
+  .mascot-sm { width: 120px; max-width: 44vw; margin: 4px auto 10px; display: block; opacity: .9; }
 </style>
 </head>
 <body>
 
 <div id="loading" class="center-screen">
+  <img class="mascot" src="__KIRA_LOADING__" alt="Кира" onerror="this.style.display='none'">
   <div class="skeleton" style="width:120px;height:20px"></div>
 </div>
 
 <div id="linkScreen" class="center-screen hidden">
-  <div class="logo" style="font-size:22px;margin-bottom:6px"><span class="mark">Q</span>QMods</div>
+  <img class="mascot" src="__KIRA_HERO__" alt="Кира" onerror="this.style.display='none'">
+  <div class="logo" style="font-size:20px;margin-bottom:6px">Привет, я Кира 🖤</div>
   <p class="muted" style="max-width:280px">Аккаунт ещё не привязан. Введите одноразовый код из личного кабинета qmods.ru/mod.</p>
   <input type="text" id="codeInput" maxlength="10" placeholder="ХХХХХХХХХХ" style="max-width:220px;margin-top:14px">
   <button class="btn primary" style="max-width:220px" onclick="doLink()">Привязать</button>
@@ -374,7 +378,9 @@ function renderDevices() {
   api('devices', {}).then(function (res) {
     var devices = (res && res.devices) || [];
     if (devices.length === 0) {
-      el.innerHTML = '<div class="card"><h3>Устройства</h3><p class="muted">Устройство ещё не привязано.</p></div>';
+      el.innerHTML = '<div class="card" style="text-align:center">' +
+        '<img class="mascot-sm" src="__KIRA_EMPTY__" alt="" onerror="this.style.display=\\'none\\'">' +
+        '<h3>Устройства</h3><p class="muted">Устройство ещё не привязано.</p></div>';
       return;
     }
     var d = devices[0];

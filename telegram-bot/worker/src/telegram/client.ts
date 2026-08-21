@@ -50,6 +50,17 @@ export class TelegramClient {
     });
   }
 
+  /** photoUrl must be publicly reachable — Telegram fetches it itself, we never upload bytes. */
+  sendPhoto(chatId: number | string, photoUrl: string, caption?: string, keyboard?: InlineKeyboard) {
+    return this.call('sendPhoto', {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      parse_mode: 'HTML',
+      reply_markup: keyboard ? { inline_keyboard: keyboard } : undefined,
+    });
+  }
+
   answerCallbackQuery(callbackQueryId: string, text?: string, showAlert = false) {
     return this.call('answerCallbackQuery', {
       callback_query_id: callbackQueryId,
@@ -65,5 +76,17 @@ export class TelegramClient {
       secret_token: secretToken,
       allowed_updates: ['message', 'callback_query'],
     });
+  }
+
+  /**
+   * One-time persona setup — the bot's own profile photo has no Bot API
+   * method (only /setuserpic in @BotFather can set that), but its display
+   * name and the two description fields shown before /start are settable
+   * here. See index.ts's /setup-profile route.
+   */
+  async setPersona(name: string, description: string, shortDescription: string): Promise<void> {
+    await this.call('setMyName', { name });
+    await this.call('setMyDescription', { description });
+    await this.call('setMyShortDescription', { short_description: shortDescription });
   }
 }

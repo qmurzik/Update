@@ -15,6 +15,13 @@ binding = "DB"
 database_name = "qmods-telegram-bot"
 database_id = "b2c7e985-5e1e-42f1-a8e2-a5df52f0ec22"
 
+# Статика — изображения маскота (Киры), отдаются напрямую платформой
+# (не через код воркера) по путям вида /img/kira-hero.webp. Публично
+# доступны, значит годятся и для Telegram sendPhoto (принимает URL),
+# и для <img src> в Mini App.
+[assets]
+directory = "./public"
+
 # Периодическая доставка отложенных уведомлений (оплата, окончание
 # подписки, новости) — см. src/index.ts::scheduled(). Раз в 5 минут
 # достаточно и укладывается в бесплатный лимит крон-триггеров.
@@ -35,6 +42,7 @@ QMODS_SUBSCRIBE_URL = "https://qmods.ru/subscribe/"
 QMODS_SUPPORT_URL = "https://qmods.ru/mod/support.php"
 # Список Telegram ID администраторов через запятую.
 ADMIN_TELEGRAM_IDS = "5110155633"
-# Публичный URL этого же воркера + /app (Mini App). Подставь свой, если
-# домен воркера отличается — иначе кнопка "Открыть в Mini App" не покажется.
-WEBAPP_URL = "https://update.qmurzik7.workers.dev/app"
+# Публичный origin этого же воркера (без пути в конце). Подставь свой, если
+# домен воркера отличается — иначе не покажется кнопка "Открыть в Mini App"
+# и не будут отправляться фото Киры (оба берут путь от этого URL).
+PUBLIC_URL = "https://update.qmurzik7.workers.dev"
