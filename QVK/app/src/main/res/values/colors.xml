@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- QVK brand accent (default "Aurora Blue"); users can pick alternates in Settings -->
+    <color name="qvk_seed_blue">#4C7CFF</color>
+    <color name="qvk_seed_violet">#8A5CF6</color>
+    <color name="qvk_seed_emerald">#12B886</color>
+    <color name="qvk_seed_rose">#F5457A</color>
+    <color name="qvk_seed_amber">#F5A623</color>
+
+    <color name="qvk_amoled_black">#000000</color>
+    <color name="splash_background_light">#FFFFFF</color>
+    <color name="splash_background_dark">#000000</color>
+</resources>
