@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bar_bg">#FFFFFF</color>
-    <color name="bar_bg_dark">#121212</color>
+    <color name="bg_root">#000000</color>
+    <color name="bar_bg">#0A0A0A</color>
+    <color name="bar_bg_translucent">#CC0A0A0A</color>
     <color name="accent">#FE2C55</color>
     <color name="accent_secondary">#25F4EE</color>
-    <color name="icon_tint">#161823</color>
-    <color name="icon_tint_dark">#EDEDED</color>
-    <color name="divider">#E5E5E5</color>
-    <color name="divider_dark">#2A2A2A</color>
-    <color name="offline_bg">#0F0F0F</color>
-    <color name="text_primary">#161823</color>
-    <color name="text_primary_dark">#F1F1F2</color>
-    <color name="text_secondary">#75778B</color>
+    <color name="icon_tint">#EDEDED</color>
+    <color name="icon_tint_inactive">#7A7A85</color>
+    <color name="divider">#1F1F23</color>
+    <color name="offline_bg">#0A0A0A</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8A8B96</color>
+    <color name="splash_bg_top">#18152B</color>
+    <color name="splash_bg_bottom">#361A4A</color>
 </resources>

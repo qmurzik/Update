@@ -1,28 +1,40 @@
 package ru.qmurzik.litetok;
 
 import android.Manifest;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
-import android.webkit.WebStorage;
 import android.webkit.WebView;
+import android.widget.ImageView;
+import android.widget.PopupWindow;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity implements AppWebViewClient.Callback, AppWebChromeClient.Callback {
 
@@ -30,70 +42,245 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     private static final int REQUEST_STORAGE_PERMISSION = 101;
     private static final int REQUEST_FILE_CHOOSER = 200;
 
-    private static final String START_URL = "https://www.tiktok.com/";
+    private static final String HOME_URL = "https://www.tiktok.com/foryou";
+    private static final String DISCOVER_URL = "https://www.tiktok.com/explore";
+    private static final String UPLOAD_URL = "https://www.tiktok.com/upload";
+    private static final String INBOX_URL = "https://www.tiktok.com/messages";
+    private static final String PROFILE_JS =
+            "(function(){"
+                    + "var el=document.querySelector('[data-e2e=\"profile-icon\"]')"
+                    + "||document.querySelector('[data-e2e=\"nav-profile\"]')"
+                    + "||document.querySelector('header a[href^=\"/@\"]');"
+                    + "if(el){el.click();}else{location.href='https://www.tiktok.com/setting';}"
+                    + "})();";
+
     private static final String MOBILE_UA =
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
-                    + "Chrome/124.0.0.0 Mobile Safari/537.36";
+            "Mozilla/5.0 (Linux; Android 13; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+                    + "Chrome/127.0.0.0 Mobile Safari/537.36";
     private static final String DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                    + "Chrome/124.0.0.0 Safari/537.36";
+                    + "Chrome/127.0.0.0 Safari/537.36";
     private static final String LITE_MODE_CSS =
             "(function(){var s=document.createElement('style');"
                     + "s.innerHTML='*{animation-duration:0.001s !important;"
                     + "transition-duration:0.001s !important;scroll-behavior:auto !important;}';"
                     + "document.head.appendChild(s);})();";
 
+    private static final long MIN_SPLASH_MS = 500;
+    private static final int SCROLL_HIDE_THRESHOLD = 12;
+
     private WebView webView;
     private ProgressBar progressBar;
     private View offlineOverlay;
+    private View splashOverlay;
+    private View bottomNav;
+    private TextView btnMenu;
     private Prefs prefs;
+
+    private View navHome;
+    private View navDiscover;
+    private View navUpload;
+    private View navInbox;
+    private View navProfile;
+    private ImageView iconHome;
+    private ImageView iconDiscover;
+    private ImageView iconInbox;
+    private ImageView iconProfile;
 
     private ValueCallback<Uri[]> filePathCallback;
     private long lastBackPressAt;
+    private long splashShownAt;
+    private boolean splashDismissed;
+    private boolean chromeHidden;
+    private int selectedTab = 0;
 
     private DownloadManager.Request pendingDownload;
+    private String appliedUserAgent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setupEdgeToEdge();
         setContentView(R.layout.activity_main);
 
         prefs = new Prefs(this);
-        webView = (WebView) findViewById(R.id.webview);
-        progressBar = (ProgressBar) findViewById(R.id.progress_bar);
-        offlineOverlay = findViewById(R.id.offline_overlay);
-
-        findViewById(R.id.btn_back).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (webView.canGoBack()) webView.goBack();
-            }
-        });
-        findViewById(R.id.btn_forward).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (webView.canGoForward()) webView.goForward();
-            }
-        });
-        findViewById(R.id.btn_reload).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                reload();
-            }
-        });
-        findViewById(R.id.btn_menu).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
-            }
-        });
-        findViewById(R.id.btn_retry).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                reload();
-            }
-        });
-
+        bindViews();
+        applyWindowInsets();
         setupWebView();
+        setupNavigation();
+        updateTabHighlight();
+
+        splashShownAt = System.currentTimeMillis();
+        animateSplashIn();
 
         if (savedInstanceState == null) {
             loadStartPage();
         }
+    }
+
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
+
+    private void bindViews() {
+        webView = (WebView) findViewById(R.id.webview);
+        progressBar = (ProgressBar) findViewById(R.id.progress_bar);
+        offlineOverlay = findViewById(R.id.offline_overlay);
+        splashOverlay = findViewById(R.id.splash_overlay);
+        bottomNav = findViewById(R.id.bottom_nav);
+        btnMenu = (TextView) findViewById(R.id.btn_menu);
+
+        navHome = findViewById(R.id.nav_home);
+        navDiscover = findViewById(R.id.nav_discover);
+        navUpload = findViewById(R.id.nav_upload);
+        navInbox = findViewById(R.id.nav_inbox);
+        navProfile = findViewById(R.id.nav_profile);
+        iconHome = (ImageView) findViewById(R.id.icon_home);
+        iconDiscover = (ImageView) findViewById(R.id.icon_discover);
+        iconInbox = (ImageView) findViewById(R.id.icon_inbox);
+        iconProfile = (ImageView) findViewById(R.id.icon_profile);
+    }
+
+    private void applyWindowInsets() {
+        findViewById(android.R.id.content).setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                int top = insets.getSystemWindowInsetTop();
+                int bottom = insets.getSystemWindowInsetBottom();
+                btnMenu.setTranslationY(top + dp(4));
+                ViewGroup.MarginLayoutParams navParams = (ViewGroup.MarginLayoutParams) bottomNav.getLayoutParams();
+                navParams.bottomMargin = dp(16) + bottom;
+                bottomNav.setLayoutParams(navParams);
+                return insets;
+            }
+        });
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void setupNavigation() {
+        View.OnClickListener tabListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (v == navHome) selectTab(0);
+                else if (v == navDiscover) selectTab(1);
+                else if (v == navUpload) webView.loadUrl(UPLOAD_URL);
+                else if (v == navInbox) selectTab(3);
+                else if (v == navProfile) selectTab(4);
+            }
+        };
+        navHome.setOnClickListener(tabListener);
+        navDiscover.setOnClickListener(tabListener);
+        navUpload.setOnClickListener(tabListener);
+        navInbox.setOnClickListener(tabListener);
+        navProfile.setOnClickListener(tabListener);
+
+        btnMenu.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showQuickMenu();
+            }
+        });
+    }
+
+    private void selectTab(int index) {
+        selectedTab = index;
+        updateTabHighlight();
+        switch (index) {
+            case 0: webView.loadUrl(HOME_URL); break;
+            case 1: webView.loadUrl(DISCOVER_URL); break;
+            case 3: webView.loadUrl(INBOX_URL); break;
+            case 4: webView.evaluateJavascript(PROFILE_JS, null); break;
+            default: break;
+        }
+    }
+
+    private void updateTabHighlight() {
+        int active = getResources().getColor(R.color.accent);
+        int inactive = getResources().getColor(R.color.icon_tint_inactive);
+        iconHome.setColorFilter(selectedTab == 0 ? active : inactive);
+        iconDiscover.setColorFilter(selectedTab == 1 ? active : inactive);
+        iconInbox.setColorFilter(selectedTab == 3 ? active : inactive);
+        iconProfile.setColorFilter(selectedTab == 4 ? active : inactive);
+
+        setLabelColor(R.id.label_home, selectedTab == 0);
+        setLabelColor(R.id.label_discover, selectedTab == 1);
+        setLabelColor(R.id.label_inbox, selectedTab == 3);
+        setLabelColor(R.id.label_profile, selectedTab == 4);
+    }
+
+    private void setLabelColor(int id, boolean active) {
+        TextView label = (TextView) findViewById(id);
+        label.setTextColor(getResources().getColor(active ? R.color.accent : R.color.icon_tint_inactive));
+    }
+
+    private void showQuickMenu() {
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View content = inflater.inflate(R.layout.popup_quick_menu, null);
+        final PopupWindow popup = new PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        popup.setOutsideTouchable(true);
+        popup.setElevation(dp(12));
+
+        content.findViewById(R.id.menu_back).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                popup.dismiss();
+                if (webView.canGoBack()) webView.goBack();
+            }
+        });
+        content.findViewById(R.id.menu_forward).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                popup.dismiss();
+                if (webView.canGoForward()) webView.goForward();
+            }
+        });
+        content.findViewById(R.id.menu_reload).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                popup.dismiss();
+                reload();
+            }
+        });
+        content.findViewById(R.id.menu_settings).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                popup.dismiss();
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            }
+        });
+
+        popup.showAsDropDown(btnMenu, -dp(160), dp(8), Gravity.NO_GRAVITY);
+    }
+
+    private void animateSplashIn() {
+        splashOverlay.setAlpha(0f);
+        splashOverlay.setScaleX(0.9f);
+        splashOverlay.setScaleY(0.9f);
+        splashOverlay.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(300).start();
+    }
+
+    private void dismissSplashIfReady() {
+        if (splashDismissed) return;
+        long elapsed = System.currentTimeMillis() - splashShownAt;
+        long remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (splashDismissed) return;
+                splashDismissed = true;
+                ObjectAnimator fade = ObjectAnimator.ofFloat(splashOverlay, "alpha", 1f, 0f);
+                fade.setDuration(350);
+                fade.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        splashOverlay.setVisibility(View.GONE);
+                    }
+                });
+                fade.start();
+            }
+        }, remaining);
     }
 
     private void setupWebView() {
@@ -106,18 +293,22 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setSupportMultipleWindows(false);
+        settings.setSupportMultipleWindows(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setGeolocationEnabled(false);
         settings.setAllowFileAccess(true);
         settings.setTextZoom(prefs.getTextZoom());
         settings.setUserAgentString(prefs.isDesktopSite() ? DESKTOP_UA : MOBILE_UA);
+        appliedUserAgent = prefs.isDesktopSite() ? DESKTOP_UA : MOBILE_UA;
+
+        WebView.setWebContentsDebuggingEnabled(true);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new AppWebViewClient(this, this));
-        webView.setWebChromeClient(new AppWebChromeClient(this, this));
+        webView.setWebChromeClient(new AppWebChromeClient(this, webView, this));
         webView.setDownloadListener(new android.webkit.DownloadListener() {
             @Override
             public void onDownloadStart(String url, String userAgent, String contentDisposition,
@@ -125,23 +316,42 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
                 startDownload(url, userAgent, contentDisposition, mimeType);
             }
         });
+        webView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
+                int dy = scrollY - oldScrollY;
+                if (dy > SCROLL_HIDE_THRESHOLD && scrollY > dp(80)) {
+                    setChromeHidden(true);
+                } else if (dy < -SCROLL_HIDE_THRESHOLD || scrollY < dp(80)) {
+                    setChromeHidden(false);
+                }
+            }
+        });
+    }
+
+    private void setChromeHidden(boolean hidden) {
+        if (hidden == chromeHidden) return;
+        chromeHidden = hidden;
+        float navTarget = hidden ? bottomNav.getHeight() + dp(32) : 0f;
+        bottomNav.animate().translationY(navTarget).setDuration(220).start();
+        btnMenu.animate().alpha(hidden ? 0f : 1f).setDuration(220).start();
     }
 
     private void loadStartPage() {
-        webView.loadUrl(START_URL, requestHeaders());
+        webView.loadUrl(HOME_URL, requestHeaders());
     }
 
     private void reload() {
         if (isNetworkAvailable()) {
             hideOfflineOverlay();
-            webView.loadUrl(webView.getUrl() != null ? webView.getUrl() : START_URL, requestHeaders());
+            webView.loadUrl(webView.getUrl() != null ? webView.getUrl() : HOME_URL, requestHeaders());
         } else {
             showOfflineOverlay();
         }
     }
 
-    private java.util.Map<String, String> requestHeaders() {
-        java.util.Map<String, String> headers = new java.util.HashMap<String, String>();
+    private Map<String, String> requestHeaders() {
+        Map<String, String> headers = new HashMap<String, String>();
         if (prefs.isLiteMode()) {
             headers.put("Save-Data", "on");
         }
@@ -158,6 +368,7 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     private void showOfflineOverlay() {
         offlineOverlay.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
+        dismissSplashIfReady();
     }
 
     private void hideOfflineOverlay() {
@@ -178,6 +389,7 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         if (prefs.isLiteMode()) {
             webView.evaluateJavascript(LITE_MODE_CSS, null);
         }
+        dismissSplashIfReady();
     }
 
     @Override
@@ -186,6 +398,7 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         if (!isNetworkAvailable()) {
             showOfflineOverlay();
         }
+        dismissSplashIfReady();
     }
 
     // AppWebChromeClient.Callback
@@ -231,8 +444,7 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
     }
 
     private void startDownload(String url, String userAgent, String contentDisposition, String mimeType) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             pendingDownload = buildDownloadRequest(url, userAgent, contentDisposition, mimeType);
             requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
             return;
@@ -315,11 +527,9 @@ public class MainActivity extends Activity implements AppWebViewClient.Callback,
         super.onPause();
     }
 
-    private String appliedUserAgent;
-
     private void applyPrefsIfChanged() {
         String desiredUa = prefs.isDesktopSite() ? DESKTOP_UA : MOBILE_UA;
-        boolean uaChanged = appliedUserAgent != null && !appliedUserAgent.equals(desiredUa);
+        boolean uaChanged = !desiredUa.equals(appliedUserAgent);
         appliedUserAgent = desiredUa;
         webView.getSettings().setUserAgentString(desiredUa);
         webView.getSettings().setTextZoom(prefs.getTextZoom());

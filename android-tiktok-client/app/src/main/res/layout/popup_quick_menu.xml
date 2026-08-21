@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="200dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_popup_menu"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp"
+    android:elevation="12dp">
+
+    <LinearLayout
+        android:id="@+id/menu_back"
+        style="@style/QuickMenuRow">
+        <TextView style="@style/QuickMenuGlyph" android:text="@string/glyph_back" />
+        <TextView style="@style/QuickMenuLabel" android:text="@string/action_back" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/menu_forward"
+        style="@style/QuickMenuRow">
+        <TextView style="@style/QuickMenuGlyph" android:text="@string/glyph_forward" />
+        <TextView style="@style/QuickMenuLabel" android:text="@string/action_forward" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/menu_reload"
+        style="@style/QuickMenuRow">
+        <TextView style="@style/QuickMenuGlyph" android:text="@string/glyph_reload" />
+        <TextView style="@style/QuickMenuLabel" android:text="@string/action_reload" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:background="@color/divider" />
+
+    <LinearLayout
+        android:id="@+id/menu_settings"
+        style="@style/QuickMenuRow">
+        <TextView style="@style/QuickMenuGlyph" android:text="⚙" />
+        <TextView style="@style/QuickMenuLabel" android:text="@string/action_settings" />
+    </LinearLayout>
+</LinearLayout>

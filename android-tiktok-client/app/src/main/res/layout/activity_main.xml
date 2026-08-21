@@ -1,67 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/bar_bg">
+    android:background="@color/bg_root">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <LinearLayout
+        android:id="@+id/offline_overlay"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="@color/bar_bg"
-        android:elevation="2dp">
-
-        <Button
-            android:id="@+id/btn_back"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="44dp"
-            android:layout_height="match_parent"
-            android:text="@string/glyph_back"
-            android:textSize="20sp"
-            android:textColor="@color/text_primary"
-            android:contentDescription="@string/action_back" />
-
-        <Button
-            android:id="@+id/btn_forward"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="44dp"
-            android:layout_height="match_parent"
-            android:text="@string/glyph_forward"
-            android:textSize="20sp"
-            android:textColor="@color/text_primary"
-            android:contentDescription="@string/action_forward" />
-
-        <Button
-            android:id="@+id/btn_reload"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="44dp"
-            android:layout_height="match_parent"
-            android:text="@string/glyph_reload"
-            android:textSize="18sp"
-            android:textColor="@color/text_primary"
-            android:contentDescription="@string/action_reload" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@color/offline_bg"
+        android:padding="32dp"
+        android:visibility="gone">
 
         <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="@string/app_name"
-            android:textColor="@color/accent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/glyph_offline"
+            android:textSize="48sp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_title"
+            android:textColor="@color/text_primary"
             android:textStyle="bold"
-            android:textSize="16sp" />
+            android:textSize="18sp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_message"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="24dp" />
 
         <Button
-            android:id="@+id/btn_menu"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="44dp"
-            android:layout_height="match_parent"
-            android:text="@string/glyph_menu"
-            android:textSize="20sp"
-            android:textColor="@color/text_primary"
-            android:contentDescription="@string/action_settings" />
+            android:id="@+id/btn_retry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_retry"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/bg_upload_button"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
     </LinearLayout>
 
     <ProgressBar
@@ -69,64 +61,173 @@
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="3dp"
+        android:layout_gravity="top"
         android:max="100"
-        android:progressTint="@color/accent"
+        android:progressDrawable="@drawable/progress_gradient"
         android:indeterminate="false"
         android:visibility="gone" />
 
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+    <TextView
+        android:id="@+id/btn_menu"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_floating_circle"
+        android:gravity="center"
+        android:text="@string/glyph_menu"
+        android:textColor="@color/text_primary"
+        android:textSize="20sp"
+        android:contentDescription="@string/action_settings" />
 
-        <WebView
-            android:id="@+id/webview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+    <LinearLayout
+        android:id="@+id/bottom_nav"
+        android:layout_width="wrap_content"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_bottom_nav"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:elevation="8dp">
 
         <LinearLayout
-            android:id="@+id/offline_overlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:id="@+id/nav_home"
+            android:layout_width="56dp"
+            android:layout_height="52dp"
             android:orientation="vertical"
             android:gravity="center"
-            android:background="@color/offline_bg"
-            android:padding="32dp"
-            android:visibility="gone">
+            android:background="?android:attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:id="@+id/icon_home"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_home" />
 
             <TextView
+                android:id="@+id/label_home"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/glyph_offline"
-                android:textSize="48sp"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/offline_title"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:gravity="center" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/offline_message"
-                android:textColor="#AAAAAA"
-                android:textSize="14sp"
-                android:gravity="center"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="24dp" />
-
-            <Button
-                android:id="@+id/btn_retry"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/offline_retry"
-                android:textColor="#FFFFFF"
-                android:backgroundTint="@color/accent" />
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_home"
+                android:textSize="9sp" />
         </LinearLayout>
-    </FrameLayout>
-</LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nav_discover"
+            android:layout_width="56dp"
+            android:layout_height="52dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:id="@+id/icon_discover"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_discover" />
+
+            <TextView
+                android:id="@+id/label_discover"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_discover"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nav_upload"
+            android:layout_width="46dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/bg_upload_button">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_nav_upload" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nav_inbox"
+            android:layout_width="56dp"
+            android:layout_height="52dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:id="@+id/icon_inbox"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_inbox" />
+
+            <TextView
+                android:id="@+id/label_inbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_inbox"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nav_profile"
+            android:layout_width="56dp"
+            android:layout_height="52dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:id="@+id/icon_profile"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_profile" />
+
+            <TextView
+                android:id="@+id/label_profile"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_profile"
+                android:textSize="9sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/splash_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_splash_gradient"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ImageView
+            android:id="@+id/splash_logo"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:src="@mipmap/ic_launcher" />
+
+        <TextView
+            android:id="@+id/splash_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/app_name"
+            android:textColor="@color/text_primary"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-black" />
+    </LinearLayout>
+</FrameLayout>

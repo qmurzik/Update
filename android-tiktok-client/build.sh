@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Offline build of the LiteTok APK using Debian/Ubuntu's packaged Android
+# Offline build of the NeoTok APK using Debian/Ubuntu's packaged Android
 # tools (aapt, aidl, dalvik-exchange/dx, zipalign, apksigner) instead of
 # Gradle + the Android SDK Manager, which need dl.google.com.
 #
@@ -44,23 +44,23 @@ javac -encoding UTF-8 -source 8 -target 8 -nowarn -Xlint:-options \
     @"$JAVA_SOURCES"
 
 echo "==> Converting classes to Dalvik bytecode (classes.dex)"
-java -jar "$DX_JAR" --dex --min-sdk-version=21 --output="$DEX_DIR/classes.dex" "$OBJ_DIR"
+java -jar "$DX_JAR" --dex --min-sdk-version=23 --output="$DEX_DIR/classes.dex" "$OBJ_DIR"
 
 echo "==> Packaging unsigned APK"
-UNSIGNED_APK="$APK_DIR/litetok-unsigned.apk"
+UNSIGNED_APK="$APK_DIR/neotok-unsigned.apk"
 aapt package -f \
     -M "$APP_DIR/AndroidManifest.xml" \
     -S "$APP_DIR/res" \
     -I "$ANDROID_JAR" \
     -F "$UNSIGNED_APK" \
-    --min-sdk-version 21 \
+    --min-sdk-version 23 \
     --target-sdk-version 23 \
     --version-code 1 \
     --version-name "1.0" \
     "$DEX_DIR"
 
 echo "==> Zip-aligning APK"
-ALIGNED_APK="$APK_DIR/litetok-aligned.apk"
+ALIGNED_APK="$APK_DIR/neotok-aligned.apk"
 zipalign -f 4 "$UNSIGNED_APK" "$ALIGNED_APK"
 
 echo "==> Creating a debug signing key (if missing)"
@@ -68,14 +68,14 @@ if [ ! -f "$KEYSTORE" ]; then
     keytool -genkeypair -v \
         -keystore "$KEYSTORE" \
         -storepass android -keypass android \
-        -alias litetok-debug \
+        -alias neotok-debug \
         -keyalg RSA -keysize 2048 -validity 10000 \
-        -dname "CN=LiteTok Debug, OU=Dev, O=qmurzik, L=Local, S=Local, C=RU" \
+        -dname "CN=NeoTok Debug, OU=Dev, O=qmurzik, L=Local, S=Local, C=RU" \
         > /dev/null
 fi
 
 echo "==> Signing APK"
-SIGNED_APK="$PROJECT_DIR/litetok-debug.apk"
+SIGNED_APK="$PROJECT_DIR/neotok-debug.apk"
 apksigner sign \
     --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
     --out "$SIGNED_APK" \

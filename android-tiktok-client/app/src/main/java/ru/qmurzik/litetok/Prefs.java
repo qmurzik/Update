@@ -17,7 +17,7 @@ final class Prefs {
     }
 
     boolean isLiteMode() {
-        return prefs.getBoolean(KEY_LITE_MODE, true);
+        return prefs.getBoolean(KEY_LITE_MODE, false);
     }
 
     void setLiteMode(boolean enabled) {

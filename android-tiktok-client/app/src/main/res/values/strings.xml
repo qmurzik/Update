@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">LiteTok</string>
+    <string name="app_name">NeoTok</string>
     <string name="settings_title">Настройки</string>
 
     <string name="glyph_back">‹</string>
@@ -14,6 +14,12 @@
     <string name="action_reload">Обновить</string>
     <string name="action_settings">Настройки</string>
 
+    <string name="nav_home">Главная</string>
+    <string name="nav_discover">Поиск</string>
+    <string name="nav_upload">Создать</string>
+    <string name="nav_inbox">Входящие</string>
+    <string name="nav_profile">Профиль</string>
+
     <string name="toast_press_back_again">Нажмите ещё раз, чтобы выйти</string>
 
     <string name="offline_title">Нет подключения к интернету</string>
@@ -25,8 +31,8 @@
 
     <string name="download_started">Загрузка начата</string>
 
-    <string name="settings_lite_mode">Режим для слабых устройств</string>
-    <string name="settings_lite_mode_summary">Отключает CSS-анимации на странице и сообщает сайту заголовок Save-Data — экономит заряд батареи и, по возможности, трафик</string>
+    <string name="settings_lite_mode">Экономия батареи</string>
+    <string name="settings_lite_mode_summary">Отключает CSS-анимации на странице и сообщает сайту заголовок Save-Data</string>
 
     <string name="settings_desktop_site">Версия для ПК</string>
     <string name="settings_desktop_site_summary">Открывать полную веб-версию вместо мобильной</string>
@@ -38,7 +44,7 @@
     <string name="settings_clear_data_done">Данные очищены, выполнен выход из аккаунта</string>
 
     <string name="settings_about">О приложении</string>
-    <string name="settings_about_text">LiteTok — неофициальный облегчённый клиент мобильной веб-версии TikTok для слабых Android-устройств. Приложение не аффилировано с TikTok/ByteDance, не хранит и не передаёт ваши данные на сторонние серверы: авторизация и весь контент загружаются напрямую с сайта tiktok.com внутри защищённого WebView.</string>
+    <string name="settings_about_text">NeoTok — неофициальный Android-клиент TikTok на основе оптимизированного WebView: быстрее и легче официального приложения, с полным доступом к функциям сайта. Не аффилирован с TikTok/ByteDance, не хранит и не передаёт данные на сторонние серверы — авторизация и весь контент идут напрямую с tiktok.com.</string>
 
     <string name="settings_close">Закрыть</string>
 </resources>
