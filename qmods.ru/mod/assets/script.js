@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════
-   QMODS · AURORA MOTION ENGINE
+   QMODS · CYBER MOTION ENGINE
    Визуальный слой: анимации, микровзаимодействия, фон.
    Бизнес-логика не затрагивается — при любой ошибке контент остаётся видимым.
    ══════════════════════════════════════════════════════════════════════ */
@@ -66,10 +66,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    /* PWA */
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function () {});
-    }
+    /* PWA. Регистрацию service worker выполняет render_footer() —
+       здесь только приглашение установки, чтобы не ловить 404 на /sw.js. */
     var deferredPrompt;
     var installBtn = document.getElementById('installBtn');
     window.addEventListener('beforeinstallprompt', function (e) {
@@ -189,6 +187,11 @@ function copyText(text, message) {
                 grain.className = 'grain';
                 grain.setAttribute('aria-hidden', 'true');
                 document.body.appendChild(grain);
+
+                var scan = document.createElement('div');
+                scan.className = 'cy-scanlines';
+                scan.setAttribute('aria-hidden', 'true');
+                document.body.appendChild(scan);
             }
         } catch (e) { }
     }
@@ -217,7 +220,8 @@ function copyText(text, message) {
     function buildReveal() {
         var auto = '.card,.stat-tile,.insight-card,.ach,.feature-panel,.list-panel,.profile-panel,' +
             '.settings-drawer,.lnd-feature,.lnd-stat,.bento,.lnd-step,.lnd-plan,.rev-card,.faq-item,' +
-            '.support-card,.section-block,.access,.level-panel,.notification-stack,.review-form,.state-card';
+            '.support-card,.section-block,.access,.level-panel,.notification-stack,.review-form,.state-card,' +
+            '.cy-card,.cy-news article,.cy-band,.cy-launcher,.hud';
         document.querySelectorAll(auto).forEach(function (el) {
             if (!el.hasAttribute('data-reveal')) el.setAttribute('data-reveal', '');
         });
@@ -257,7 +261,8 @@ function copyText(text, message) {
     /* ── Прожектор под курсором внутри карточек ──────────────────── */
     function buildSpotlight() {
         if (coarse || reduced) return;
-        var sel = '.lnd-feature,.lnd-stat,.stat-tile,.bento,.lnd-plan,.rev-card,.insight-card,.card,.access,.feature-panel';
+        var sel = '.lnd-feature,.lnd-stat,.stat-tile,.bento,.lnd-plan,.rev-card,.insight-card,.card,.access,' +
+            '.feature-panel,.cy-card,.cy-news article,.hud';
         document.addEventListener('pointermove', function (e) {
             var el = e.target.closest && e.target.closest(sel);
             if (!el) return;
@@ -285,8 +290,8 @@ function copyText(text, message) {
     /* ── 3D-наклон сцены с орбитой ───────────────────────────────── */
     function buildTilt() {
         if (coarse || reduced) return;
-        document.querySelectorAll('.orb-stage,.au-orb,.dash-hero-avatar').forEach(function (stage) {
-            var host = stage.closest('.lnd-visual,.au-visual,.dash-hero') || stage.parentNode;
+        document.querySelectorAll('.orb-stage,.au-orb,.dash-hero-avatar,.kira-frame').forEach(function (stage) {
+            var host = stage.closest('.lnd-visual,.au-visual,.dash-hero,.cy-hero-kira') || stage.parentNode;
             if (!host) return;
             host.addEventListener('pointermove', function (e) {
                 var r = host.getBoundingClientRect();
@@ -371,7 +376,7 @@ function copyText(text, message) {
         document.addEventListener('click', function (e) {
             if (!e.target.closest) return;
             var el = e.target.closest('.btn,.primary-cta,.soft-cta,.au-submit,.copy-button,.admin-primary,' +
-                '.app-sidebar-nav a,.admin-nav a,.admin-nav button,.stat-tile,.mobile-bottom-nav a,.lnd-plan button');
+                '.app-sidebar-nav a,.admin-nav a,.admin-nav button,.stat-tile,.mobile-bottom-nav a,.lnd-plan button,.cy-card');
             if (!el) return;
             var cs = getComputedStyle(el);
             if (cs.position === 'static') el.style.position = 'relative';
@@ -540,9 +545,124 @@ function copyText(text, message) {
         setInterval(tick, 1000);
     }
 
+    /* ── Поле частиц (canvas) ────────────────────────────────────── */
+    function buildParticles() {
+        if (reduced) return;
+        var canvas;
+        try {
+            canvas = document.createElement('canvas');
+            canvas.className = 'cy-particles';
+            canvas.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(canvas);
+        } catch (e) { return; }
+
+        var ctx = canvas.getContext && canvas.getContext('2d');
+        if (!ctx) { canvas.remove(); return; }
+
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var w = 0, h = 0, parts = [], running = true;
+        var colors = ['168,85,255', '255,62,200', '34,230,255'];
+
+        function resize() {
+            w = window.innerWidth; h = window.innerHeight;
+            canvas.width = w * dpr; canvas.height = h * dpr;
+            canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            var count = Math.round(Math.min(90, Math.max(28, (w * h) / 26000)));
+            if (coarse) count = Math.round(count * 0.5);
+            parts = [];
+            for (var i = 0; i < count; i++) {
+                parts.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: 0.7 + Math.random() * 1.9,
+                    vx: (Math.random() - 0.5) * 0.22,
+                    vy: -(0.08 + Math.random() * 0.32),
+                    a: 0.18 + Math.random() * 0.5,
+                    c: colors[(Math.random() * colors.length) | 0],
+                    p: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        function frame() {
+            if (!running) return;
+            ctx.clearRect(0, 0, w, h);
+            for (var i = 0; i < parts.length; i++) {
+                var p = parts[i];
+                p.p += 0.012;
+                p.x += p.vx + Math.sin(p.p) * 0.16;
+                p.y += p.vy;
+                if (p.y < -20) { p.y = h + 12; p.x = Math.random() * w; }
+                if (p.x < -20) p.x = w + 12;
+                if (p.x > w + 20) p.x = -12;
+
+                var alpha = p.a * (0.6 + Math.sin(p.p) * 0.4);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(' + p.c + ',' + alpha.toFixed(3) + ')';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(' + p.c + ',' + (alpha * 0.8).toFixed(3) + ')';
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+            requestAnimationFrame(frame);
+        }
+
+        resize();
+        var rt;
+        window.addEventListener('resize', function () {
+            clearTimeout(rt);
+            rt = setTimeout(resize, 220);
+        }, { passive: true });
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) { running = false; }
+            else if (!running) { running = true; requestAnimationFrame(frame); }
+        });
+        requestAnimationFrame(frame);
+    }
+
+    /* ── Реплики Kira: эффект печати ─────────────────────────────── */
+    function buildTyping() {
+        document.querySelectorAll('[data-type]').forEach(function (el) {
+            var lines = (el.getAttribute('data-type') || '').split('|')
+                .map(function (t) { return t.trim(); })
+                .filter(Boolean);
+            if (!lines.length) return;
+
+            if (reduced) { el.textContent = lines[0]; return; }
+
+            var li = 0, ci = 0, deleting = false;
+            function tick() {
+                var full = lines[li];
+                if (!deleting) {
+                    ci++;
+                    el.textContent = full.slice(0, ci);
+                    if (ci >= full.length) {
+                        deleting = true;
+                        return setTimeout(tick, 2600);
+                    }
+                    return setTimeout(tick, 34 + Math.random() * 40);
+                }
+                ci -= 2;
+                if (ci <= 0) {
+                    ci = 0;
+                    deleting = false;
+                    li = (li + 1) % lines.length;
+                    return setTimeout(tick, 420);
+                }
+                el.textContent = full.slice(0, ci);
+                setTimeout(tick, 18);
+            }
+            setTimeout(tick, 900);
+        });
+    }
+
     /* ── Запуск ──────────────────────────────────────────────────── */
     ready(function () {
         buildBackdrop();
+        buildParticles();
         buildCurtain();
         buildHeadline();
         buildReveal();
@@ -559,6 +679,7 @@ function copyText(text, message) {
         buildScrollSpy();
         buildAnchors();
         buildClock();
+        buildTyping();
 
         if (document.querySelector('[data-celebrate]')) {
             setTimeout(function () { window.qmodsConfetti(90); }, 700);

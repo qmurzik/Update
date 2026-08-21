@@ -216,7 +216,7 @@ body.modal-open{overflow:hidden}
 @media(max-width:600px){.admin-main{width:calc(100% - 16px)!important}.admin-hero{padding:22px}.admin-hero h1{font-size:30px!important}.admin-stat-grid{grid-template-columns:1fr!important}.admin-auth-art{padding:28px!important}.admin-auth-art strong{font-size:52px!important}.admin-auth-form h1{font-size:36px!important}.apk-manager{padding:16px!important}.detail-grid{grid-template-columns:1fr}.modal-two{grid-template-columns:1fr}}
 
 /* ══════════════════════════════════════════════════════════════════════
-   AURORA PATCH — приведение админки к новой дизайн-системе.
+   CYBER PATCH — приведение админки к новой дизайн-системе.
    Добавлено поверх существующих правил, разметка админки не менялась.
    ══════════════════════════════════════════════════════════════════════ */
 

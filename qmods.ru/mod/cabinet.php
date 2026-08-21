@@ -245,6 +245,36 @@ render_header('Кабинет', ['user' => $user]);
     </div>
   </section>
 
+  <!-- ══ Kira · цифровой ассистент ══ -->
+  <?php
+  $kiraLines = [];
+  if ($sub['active']) {
+      $kiraLines[] = 'Доступ активен. Осталось ' . (int)$sub['days_left'] . ' дн. — всё под контролем.';
+      if ((int)$sub['days_left'] <= 7) {
+          $kiraLines[] = 'Подписка скоро закончится. Советую продлить заранее.';
+      }
+  } else {
+      $kiraLines[] = 'Доступ приостановлен. Активируйте подписку — я открою систему сразу.';
+  }
+  $kiraLines[] = $device_id !== ''
+      ? 'Устройство привязано. Вход с другого завершит текущую сессию.'
+      : 'Устройство ещё не привязано. Войдите из приложения — я его запомню.';
+  $kiraLines[] = 'Открыто достижений: ' . count($userAchievements) . ' из ' . count(ACHIEVEMENTS) . '. Продолжаем.';
+  if ((int)$refCount > 0) {
+      $kiraLines[] = 'Вы пригласили ' . (int)$refCount . ' — бонусные дни уже учтены.';
+  } else {
+      $kiraLines[] = 'Пригласите друга — начислю +3 дня после его первой оплаты.';
+  }
+  ?>
+  <section class="kira-widget hud">
+    <img class="kira-widget-ava" src="assets/kira-avatar.webp" alt="Kira" width="58" height="58" loading="lazy">
+    <div class="kira-widget-body">
+      <span class="eyebrow">// KIRA · AI ASSISTANT</span>
+      <p class="kira-widget-say"><span data-type="<?= e(implode('|', $kiraLines)) ?>"></span><i></i></p>
+    </div>
+    <a class="soft-cta btn-sm" href="support.php">Нужна помощь</a>
+  </section>
+
   <?php if (!empty($syncResult['new_achievements']) || !empty($syncResult['level_up'])): ?>
   <!-- ══ Новое достижение ══ -->
   <section class="celebrate">
@@ -377,7 +407,7 @@ render_header('Кабинет', ['user' => $user]);
 
     <div class="feature-panel app-panel">
       <span class="eyebrow">Приложение</span>
-      <h2><?= $release && !empty($release['version']) ? 'QMods v' . e($release['version']) : 'Мобильное приложение' ?></h2>
+      <h2><?= $release && !empty($release['version']) ? 'QMODS v' . e($release['version']) : 'Мобильное приложение' ?></h2>
       <p><?= $release && !empty($release['changelog'])
             ? e(trim(explode("\n", $release['changelog'])[0]))
             : 'Быстрый доступ к модификациям прямо с телефона.' ?></p>

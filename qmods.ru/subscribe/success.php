@@ -29,7 +29,7 @@ if ($order && $user && strtolower((string)$order['username_lower']) === strtolow
 <meta name="color-scheme" content="dark">
 <title>Оплата — QMods</title>
 <link rel="icon" href="/mod/assets/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=aurora-1">
+<link rel="stylesheet" href="styles.css?v=cyber-1">
 </head>
 <body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -77,6 +77,6 @@ if ($order && $user && strtolower((string)$order['username_lower']) === strtolow
 
   <footer><span>QMods</span><i>•</i><a href="/mod/cabinet.php">Личный кабинет</a><i>•</i><span>Безопасная оплата</span></footer>
 </div>
-<script src="/mod/assets/script.js?v=aurora-1"></script>
+<script src="/mod/assets/script.js?v=cyber-1"></script>
 </body>
 </html>

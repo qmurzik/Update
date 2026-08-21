@@ -40,18 +40,18 @@ $currentUrl = (function (): string {
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Официальная страница загрузки приложения QMods. Версия <?= e($version) ?>.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="QMods — скачать приложение">
+<meta property="og:title" content="QMODS — скачать приложение">
 <meta property="og:description" content="Скачайте официальное приложение QMods. Версия <?= e($version) ?>.">
 <meta property="og:url" content="<?= e($currentUrl) ?>">
 <meta property="og:image" content="<?= e((preg_replace('/\?.*$/', '', $currentUrl) ?: '') . 'assets/icon-512.png') ?>">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="QMods — скачать приложение">
+<meta name="twitter:title" content="QMODS — скачать приложение">
 <meta name="twitter:description" content="Официальная страница загрузки приложения QMods.">
 <link rel="icon" href="assets/icon-192.png">
-<title>QMods — скачать приложение</title>
+<title>QMODS — скачать приложение</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="assets/style.css?v=aurora-1">
+<link rel="stylesheet" href="assets/style.css?v=cyber-1">
 <style>
 .apk-wrap{width:min(1080px,calc(100% - 32px));margin:0 auto;padding:26px 0 60px;position:relative;z-index:1}
 .apk-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:54px}
@@ -87,14 +87,14 @@ $currentUrl = (function (): string {
 
 <div class="apk-wrap">
   <header class="apk-nav">
-    <a class="apk-brand" href="index.php"><img src="assets/icon-192.png" alt="QMods"><span>QMods</span></a>
+    <a class="apk-brand" href="index.php"><img src="assets/icon-192.png" alt="QMods"><span>QMODS</span></a>
     <a class="soft-cta btn-sm" href="index.php">На сайт →</a>
   </header>
 
   <section class="apk-hero">
     <div>
       <div class="lnd-pill"><i></i> Официальная загрузка</div>
-      <h1>QMods<br><em>для Android</em></h1>
+      <h1>QMODS<br><em>для Android</em></h1>
       <p class="apk-lead">Скачайте актуальную версию приложения. APK-файл отдаётся напрямую с нашего сервера — без регистрации и лишних шагов.</p>
       <div class="apk-actions">
         <a class="primary-cta" href="<?= e($downloadUrl) ?>">⬇ Скачать APK</a>
@@ -110,7 +110,7 @@ $currentUrl = (function (): string {
     <div class="apk-phone" aria-hidden="true">
       <div class="apk-screen">
         <img src="assets/icon-512.png" alt="QMods">
-        <strong>QMods</strong>
+        <strong>QMODS</strong>
         <small>Версия <?= e($version) ?></small>
         <div class="pill">Скачать приложение</div>
       </div>
@@ -133,6 +133,6 @@ $currentUrl = (function (): string {
   <div class="apk-footer">QMods · Официальная страница загрузки приложения</div>
 </div>
 
-<script src="assets/script.js?v=aurora-1"></script>
+<script src="assets/script.js?v=cyber-1"></script>
 </body>
 </html>

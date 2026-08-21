@@ -109,19 +109,25 @@ render_header('Регистрация');
 <div class="au au-register">
 
   <section class="au-stage">
-    <a class="au-brand" href="index.php"><span>Q</span>QMods</a>
+    <a class="au-brand" href="index.php"><span>Q</span>QMODS</a>
 
     <div class="au-visual" aria-hidden="true">
-      <div class="au-orb">
-        <i></i><i></i><i></i>
-        <div class="au-orb-core">✦</div>
+      <div class="kira-frame">
+        <img src="assets/kira-hero.webp" alt="" width="880" height="1100">
+        <span class="bracket tl"></span><span class="bracket tr"></span>
+        <span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="kira-plate">
+          <img src="assets/kira-avatar.webp" alt="" width="34" height="34">
+          <div><b>KIRA</b><small>AI ASSISTANT</small></div>
+          <span class="kira-online">ONLINE</span>
+        </div>
       </div>
     </div>
 
     <div class="au-stage-copy">
-      <span>NEW MEMBER</span>
-      <h2>Твой QMods начинается здесь.</h2>
-      <p>Создай профиль и получи стартовый доступ прямо на поддерживаемом устройстве.</p>
+      <span>// NEW PLAYER</span>
+      <h2>Твой QMODS начинается здесь.</h2>
+      <p>Создай профиль и получи стартовый доступ к платформе прямо на своём устройстве.</p>
     </div>
 
     <div class="au-chips">

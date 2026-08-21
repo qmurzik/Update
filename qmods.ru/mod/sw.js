@@ -1,4 +1,4 @@
-const CACHE = 'qmods-aurora-1';
+const CACHE = 'qmods-cyber-1';
 
 self.addEventListener('install', (e) => {
     self.skipWaiting();

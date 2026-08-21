@@ -135,8 +135,8 @@ if ($method === 'POST' && csrf_ok()) {
 if (!is_admin()) {
     render_header('QMods Admin', ['is_admin' => false]);
     ?>
-    <link rel="stylesheet" href="../assets/style.css?v=aurora-1">
-    <link rel="stylesheet" href="../assets/admin.css?v=aurora-1">
+    <link rel="stylesheet" href="../assets/style.css?v=cyber-1">
+    <link rel="stylesheet" href="../assets/admin.css?v=cyber-1">
     <main class="admin-auth-v5">
         <div class="admin-auth-art"><div class="admin-mark">Q</div><span>CONTROL DECK</span><strong>QMods<br>Admin</strong><p>Центр управления пользователями, подписками и приложением.</p></div>
         <div class="admin-auth-form">
@@ -167,7 +167,7 @@ $activeRate = $stats['total'] ? round(($stats['active'] / $stats['total']) * 100
 
 render_header('QMods Admin', ['is_admin'=>true, 'user'=>current_user()]);
 ?>
-<link rel="stylesheet" href="../assets/admin.css?v=aurora-1">
+<link rel="stylesheet" href="../assets/admin.css?v=cyber-1">
 
 <style>
 .analytics-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,.8fr);gap:14px;margin:14px 0}.analytics-panel{padding:20px}.analytics-average{font-size:10px;color:#8b5cf6;font-weight:900}.chart-wrap{display:flex;gap:10px;height:220px;margin-top:10px}.chart-y{width:55px;display:flex;flex-direction:column;justify-content:space-between;color:#68716d;font-size:8px;text-transform:uppercase;letter-spacing:.08em;padding:4px 0 25px}.bar-chart{flex:1;display:flex;align-items:flex-end;gap:clamp(3px,.7vw,10px);border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden}.chart-day{height:100%;flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}.bars{height:calc(100% - 23px);width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px}.bars i,.bars b{display:block;width:42%;max-width:10px;border-radius:4px 4px 1px 1px;background:linear-gradient(180deg,#a78bfa,#7c3aed);min-height:1px}.bars b{background:linear-gradient(180deg,#67e8d0,#14b8a6)}.chart-day small{height:20px;font-size:7px;color:#59615e;margin-top:4px}.analytics-foot{display:flex;justify-content:space-between;gap:12px;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.06);color:#68716d;font-size:9px}.analytics-foot b{color:#c7d0cb}.plan-line{margin:18px 0}.plan-line>div:first-child{display:flex;justify-content:space-between;gap:10px}.plan-line b{font-size:12px}.plan-line span{font-size:9px;color:#68716d}.plan-line>strong{display:block;text-align:right;font-size:10px;color:#a78bfa;margin-top:-15px}.plan-progress{height:7px;border-radius:99px;background:#0b1110;margin-top:8px;overflow:hidden}.plan-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b5cf6,#67e8d0)}@media(max-width:900px){.analytics-grid{grid-template-columns:1fr}}@media(max-width:560px){.analytics-panel{padding:15px}.chart-wrap{height:190px}.chart-day small:nth-last-child(-n+15){display:none}.analytics-foot{display:block}.analytics-foot span{display:block;margin-top:6px}}

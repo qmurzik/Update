@@ -120,19 +120,25 @@ render_header('Вход');
 <div class="au au-login">
 
   <section class="au-stage">
-    <a class="au-brand" href="index.php"><span>Q</span>QMods</a>
+    <a class="au-brand" href="index.php"><span>Q</span>QMODS</a>
 
     <div class="au-visual" aria-hidden="true">
-      <div class="au-orb">
-        <i></i><i></i><i></i>
-        <div class="au-orb-core">Q</div>
+      <div class="kira-frame">
+        <img src="assets/kira-hero.webp" alt="" width="880" height="1100">
+        <span class="bracket tl"></span><span class="bracket tr"></span>
+        <span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="kira-plate">
+          <img src="assets/kira-avatar.webp" alt="" width="34" height="34">
+          <div><b>KIRA</b><small>AI ASSISTANT</small></div>
+          <span class="kira-online">ONLINE</span>
+        </div>
       </div>
     </div>
 
     <div class="au-stage-copy">
-      <span>PRIVATE NETWORK</span>
-      <h2>Вход без лишнего.</h2>
-      <p>Один аккаунт. Один доступ. Всё синхронизировано с вашим устройством.</p>
+      <span>// SECURE LOGIN</span>
+      <h2>Система ждёт вас.</h2>
+      <p>Один аккаунт, одно устройство, полный контроль. Kira проверит доступ до того, как вы войдёте.</p>
     </div>
 
     <div class="au-chips">
@@ -148,7 +154,7 @@ render_header('Вход');
     <div class="au-head">
       <span class="kicker">Возвращение</span>
       <h1>Снова здесь.</h1>
-      <p>Введите данные аккаунта, чтобы открыть свой QMods.</p>
+      <p>Введите данные аккаунта, чтобы открыть свой QMODS.</p>
     </div>
 
     <form class="au-form" method="post" action="login.php?device_id=<?= e($device_id) ?>">
@@ -169,7 +175,7 @@ render_header('Вход');
                  autocomplete="current-password" placeholder="Введите пароль" required>
         </div>
       </div>
-      <button class="au-submit primary-cta" type="submit"><span>Открыть QMods</span><b>↗</b></button>
+      <button class="au-submit primary-cta" type="submit"><span>Открыть QMODS</span><b>↗</b></button>
     </form>
 
     <div class="au-switch">

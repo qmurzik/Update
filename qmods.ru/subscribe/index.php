@@ -85,7 +85,7 @@ $successUrl = '/subscribe/success.php?label=' . rawurlencode((string)($paymentOr
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" href="/mod/assets/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=aurora-1">
+<link rel="stylesheet" href="styles.css?v=cyber-1">
 </head>
 <body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -178,6 +178,6 @@ $successUrl = '/subscribe/success.php?label=' . rawurlencode((string)($paymentOr
 
     <footer><span>QMods</span><a href="/mod/cabinet.php">Личный кабинет</a><i>•</i><span>Безопасная оплата</span></footer>
 </div>
-<script src="/mod/assets/script.js?v=aurora-1"></script>
+<script src="/mod/assets/script.js?v=cyber-1"></script>
 </body>
 </html>
