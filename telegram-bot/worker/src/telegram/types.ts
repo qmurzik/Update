@@ -38,6 +38,8 @@ export interface InlineKeyboardButton {
   text: string;
   callback_data?: string;
   url?: string;
+  /** Opens the Mini App (see worker/src/webapp/) inside Telegram instead of a browser tab. */
+  web_app?: { url: string };
 }
 
 export type InlineKeyboard = InlineKeyboardButton[][];

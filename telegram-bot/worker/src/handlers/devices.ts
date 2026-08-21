@@ -16,15 +16,20 @@ export async function showDevices(ctx: Ctx): Promise<void> {
   const res = await ctx.api.devices(ctx.telegramId);
   const devices = res.devices ?? [];
 
-  const lines = ['<b>📱 Мои устройства</b>', DIVIDER, ''];
+  const lines = ['<b>📱 Устройства</b>', DIVIDER, ''];
   if (devices.length === 0) {
-    lines.push('Устройство ещё не привязано. Оно появится здесь после первого входа в приложении QMods.');
+    lines.push(
+      '<blockquote>Устройство ещё не привязано</blockquote>',
+      '',
+      'Оно появится здесь автоматически после первого входа в приложение QMods.'
+    );
   } else {
+    lines.push('<blockquote>✅ Устройство привязано</blockquote>', '');
     for (const d of devices) {
-      lines.push(`Устройство: <code>${esc(d.id_short)}</code>`);
+      lines.push(`ID: <code>${esc(d.id_short)}</code>`);
       lines.push(`Android: ${esc(d.android_version ?? 'неизвестно')}`);
       lines.push(`Добавлено: ${fmtDate(d.added_at)}`);
-      lines.push(`Последняя активность: ${fmtDate(d.last_seen)}`);
+      lines.push(`Последний раз в сети: ${fmtDate(d.last_seen)}`);
     }
   }
 

@@ -32,7 +32,10 @@ form-data или query-string (объединяются, JSON-тело имее�
 
 ### `me`
 **Параметры:** `telegram_id` (строка цифр).
-Профиль/подписка/платежи привязанного аккаунта.
+Профиль/подписка/платежи привязанного аккаунта. Заодно синхронизирует
+достижения/уровень/бонусные дни — та же логика, что при загрузке
+`cabinet.php` (см. `includes/achievements.php`), так что бонусы начисляются
+и пользователям, которые вообще не заходят на сайт.
 ```json
 {
   "success": true, "linked": true,
@@ -41,7 +44,10 @@ form-data или query-string (объединяются, JSON-тело имее�
     "status": "active",
     "subscription": {"plan": "premium", "active": true, "days_left": 12, "expires_at": 173..., "expires_text": "…"},
     "device": {"linked": true, "id": "…"},
-    "payments": [{"plan": "m1", "amount": 499, "date": 173..., "date_text": "…"}]
+    "payments": [{"plan": "m1", "amount": 499, "date": 173..., "date_text": "…"}],
+    "level": {"code": "vip", "title": "VIP", "icon": "💎", "perks": "…"},
+    "achievements_unlocked": 5, "achievements_total": 13,
+    "ref_count": 3
   }
 }
 ```
@@ -79,6 +85,52 @@ form-data или query-string (объединяются, JSON-тело имее�
 ### `notifications_ack` (POST)
 **Параметры:** `telegram_id`, `ids` (массив id). Помечает уведомления
 прочитанными в боте.
+
+### `achievements`
+**Параметры:** `telegram_id`. Синхронизирует и возвращает уровень, прогресс
+до следующего и полный каталог достижений (мигрировано из
+`includes/achievements.php`).
+```json
+{
+  "success": true,
+  "level": {"code": "vip", "title": "VIP", "icon": "💎", "perks": "…"},
+  "progress": {"next_code": "legend", "next_title": "Легенда", "percent": 40, "closest": {"label": "оплат", "current": 4, "min": 10}},
+  "stats": {"payments": 4, "spent": 3996, "days": 41, "refs": 1},
+  "achievements": [{"code": "first_payment", "title": "Первая покупка", "desc": "…", "icon": "💎", "bonus": 1, "earned": true}],
+  "newly_unlocked": [], "level_up": null, "bonus_days": 0
+}
+```
+`newly_unlocked`/`level_up`/`bonus_days` ненулевые только в тот вызов,
+когда достижение/уровень выданы — бот показывает поздравление один раз.
+
+### `referrals`
+**Параметры:** `telegram_id`. Лениво генерирует `ref_code` при первом
+обращении (как `cabinet.php`), возвращает код, ссылку и счётчик приглашённых.
+```json
+{"success": true, "ref_code": "AB12CD", "ref_link": "https://qmods.ru/mod/register.php?ref=AB12CD", "ref_count": 3}
+```
+
+### `app_release`
+Без параметров. Версия/чейнджлог мобильного приложения из
+`data/app_release.json`. `download_url` присутствует только если публичная
+ссылка (`data/download_link.json`) включена — иначе бот отправляет на
+`cabinet_url` (требует обычного логина на сайте, бот не может передать
+Telegram-сессию как cookie-сессию сайта).
+```json
+{"success": true, "version": "2.3", "changelog": "…", "has_file": true, "download_url": null, "cabinet_url": "https://qmods.ru/mod/download.php"}
+```
+
+### `review`
+**Параметры:** `telegram_id`. Текущий отзыв пользователя, если есть.
+```json
+{"success": true, "review": {"rating": 5, "text": "…", "status": "pending"}}
+```
+Если отзыва нет: `{"success": true, "review": null}`.
+
+### `review_add` (POST)
+**Параметры:** `telegram_id`, `rating` (1–5), `text` (мин. 10 символов).
+Перезаписывает предыдущий отзыв пользователя (как `cabinet.php`), ставит
+статус `pending` на модерацию.
 
 ### `stats`
 Публичная агрегированная статистика (без персональных данных) — для

@@ -9,18 +9,17 @@ export async function showPayments(ctx: Ctx): Promise<void> {
   if (!(await requireLinked(ctx, me))) return;
 
   const payments = me.user!.payments ?? [];
-  const lines = ['<b>💳 Оплата / продление</b>', DIVIDER, ''];
+  const lines = ['<b>💳 Оплата и продление</b>', DIVIDER, ''];
 
   if (payments.length === 0) {
-    lines.push('Платежей пока не было.');
+    lines.push('<blockquote>Платежей пока не было</blockquote>', '', 'Выберите тариф на странице оплаты — доступ откроется сразу после подтверждения.');
   } else {
-    lines.push('<b>История платежей:</b>');
+    lines.push(`<blockquote>Всего платежей: ${payments.length}</blockquote>`, '', '<b>История:</b>');
     for (const p of payments.slice(0, 10)) {
       lines.push(`${esc(p.date_text)} — ${esc(p.plan)} — ${money(p.amount)}`);
     }
+    lines.push('', 'Продлить подписку можно на странице оплаты QMods:');
   }
-
-  lines.push('', 'Продлить подписку можно на странице оплаты QMods:');
 
   await reply(ctx, lines.join('\n'), paymentsKeyboard(ctx.env));
 }

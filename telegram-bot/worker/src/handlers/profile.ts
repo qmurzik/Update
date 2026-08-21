@@ -10,14 +10,15 @@ export async function showProfile(ctx: Ctx): Promise<void> {
 
   const u = me.user!;
   const text = [
-    '<b>👤 Мой профиль</b>',
+    '<b>👤 Профиль</b>',
     DIVIDER,
     '',
-    `Логин: <b>${esc(u.username)}</b>`,
-    `ID пользователя: <code>${esc(u.id)}</code>`,
-    `Дата регистрации: ${esc(u.created_text)}`,
-    `Статус аккаунта: ${u.status === 'active' ? '🟢 активен' : '🔴 подписка не активна'}`,
-    `Telegram: привязан ✅`,
+    `<blockquote>${u.level.icon} ${esc(u.level.title)} · 🏆 ${u.achievements_unlocked}/${u.achievements_total} · 🎁 ${u.ref_count}</blockquote>`,
+    '',
+    `<b>${esc(u.username)}</b>`,
+    `На QMods с ${esc(u.created_text)} · ID <code>${esc(u.id)}</code>`,
+    '',
+    'Telegram привязан ✅',
   ].join('\n');
 
   await reply(ctx, text, profileKeyboard());

@@ -1,18 +1,28 @@
 import type { Env } from '../config';
 import type { InlineKeyboard } from './types';
 
-export const mainMenu = (linked: boolean, isAdmin: boolean): InlineKeyboard => {
+export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = [];
+  const webAppButton: InlineKeyboard[number] | null = env.WEBAPP_URL
+    ? [{ text: '🖥 Открыть в Mini App', web_app: { url: env.WEBAPP_URL } }]
+    : null;
+
   if (!linked) {
     kb.push([{ text: '🔗 Привязать аккаунт QMods', callback_data: 'link:start' }]);
+    if (webAppButton) kb.push(webAppButton);
     kb.push([{ text: '🆘 Поддержка', callback_data: 'm:support' }]);
   } else {
+    if (webAppButton) kb.push(webAppButton);
     kb.push([
       { text: '👤 Профиль', callback_data: 'm:profile' },
       { text: '⭐ Подписка', callback_data: 'm:sub' },
     ]);
     kb.push([
       { text: '📱 Устройства', callback_data: 'm:devices' },
+      { text: '🏆 Достижения', callback_data: 'm:ach' },
+    ]);
+    kb.push([
+      { text: '🎁 Рефералы', callback_data: 'm:ref' },
       { text: '💳 Оплата', callback_data: 'm:pay' },
     ]);
     kb.push([
@@ -27,9 +37,19 @@ export const mainMenu = (linked: boolean, isAdmin: boolean): InlineKeyboard => {
 export const backButton = (target = 'm:main'): InlineKeyboard => [[{ text: '‹ Назад', callback_data: target }]];
 
 export const profileKeyboard = (): InlineKeyboard => [
+  [
+    { text: '⬇️ Скачать APK', callback_data: 'm:app' },
+    { text: '⭐ Отзыв', callback_data: 'm:review' },
+  ],
   [{ text: '🔓 Отвязать Telegram', callback_data: 'link:unlink:ask' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
+
+export const reviewStarsKeyboard = (hasExisting: boolean): InlineKeyboard => {
+  const kb: InlineKeyboard = [[1, 2, 3, 4, 5].map((n) => ({ text: `${n} ⭐️`, callback_data: `rev:star:${n}` }))];
+  kb.push([{ text: '‹ Назад', callback_data: hasExisting ? 'm:profile' : 'm:main' }]);
+  return kb;
+};
 
 export const subscriptionKeyboard = (env: Env): InlineKeyboard => [
   [{ text: '💳 Продлить подписку', url: env.QMODS_SUBSCRIBE_URL }],
@@ -64,6 +84,7 @@ export const notificationsKeyboard = (hasUnread: boolean): InlineKeyboard => {
 
 export const supportKeyboard = (env: Env): InlineKeyboard => [
   [{ text: '🆘 Страница поддержки', url: env.QMODS_SUPPORT_URL }],
+  [{ text: '💬 Сообщество в Telegram', url: 'https://t.me/qmurzik' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 

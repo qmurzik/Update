@@ -8,9 +8,7 @@ import { reply } from './reply';
 const WELCOME = `<b>👋 QMods Bot</b>
 ${DIVIDER}
 
-Дополнительный канал управления вашим аккаунтом QMods — тем же самым, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.
-
-Здесь можно смотреть подписку, устройства, историю платежей и получать уведомления, не заходя на сайт.`;
+Тот же аккаунт, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a> — подписка, устройства, достижения, рефералы и оплата теперь у вас в Telegram.`;
 
 /** /start — greet, resolve link status, show the main menu. */
 export async function handleStart(ctx: Ctx): Promise<void> {
@@ -27,10 +25,17 @@ export async function showMainMenu(ctx: Ctx, prefaceText?: string): Promise<void
   if (prefaceText) lines.push(prefaceText, '');
 
   if (linked && me.user) {
-    lines.push(`👤 Вы вошли как <b>${esc(me.user.username)}</b>`);
+    const sub = me.user.subscription;
+    const statusLine = !sub.plan || sub.plan === 'none'
+      ? 'подписки нет'
+      : sub.active
+        ? `🟢 активна · осталось ${sub.days_left} дн.`
+        : `🔴 истекла ${esc(sub.expires_text)}`;
+    lines.push(`👤 <b>${esc(me.user.username)}</b>`);
+    lines.push(`<blockquote>${statusLine}</blockquote>`);
   } else {
     lines.push('🔒 Аккаунт QMods ещё не привязан. Нажмите кнопку ниже, чтобы подключить бота к вашему личному кабинету.');
   }
 
-  await reply(ctx, lines.join('\n'), mainMenu(linked, admin));
+  await reply(ctx, lines.join('\n'), mainMenu(ctx.env, linked, admin));
 }

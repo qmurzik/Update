@@ -11,6 +11,10 @@ import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
 import { showPayments } from './payments';
 import { markAllRead, showNotifications } from './notifications';
 import { showSupport } from './support';
+import { showAchievements } from './achievements';
+import { showReferrals } from './referrals';
+import { showAppRelease } from './app';
+import { handleReviewText, pickStar, showReview } from './reviews';
 import {
   askBroadcast,
   askDelete,
@@ -39,6 +43,10 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'm:pay': showPayments,
   'm:notif': showNotifications,
   'm:support': showSupport,
+  'm:ach': showAchievements,
+  'm:ref': showReferrals,
+  'm:app': showAppRelease,
+  'm:review': showReview,
   'link:start': startLink,
   'link:cancel': cancelLink,
   'link:unlink:ask': askUnlink,
@@ -72,6 +80,10 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
   if (data.startsWith('adm:u:')) {
     const username = data.slice('adm:u:'.length);
     return (ctx) => handleSearchInput(ctx, username);
+  }
+  if (data.startsWith('rev:star:')) {
+    const rating = parseInt(data.slice('rev:star:'.length), 10);
+    if (rating >= 1 && rating <= 5) return (ctx) => pickStar(ctx, rating);
   }
   return null;
 }
@@ -147,6 +159,8 @@ async function handleMessage(update: TgUpdate, env: Env): Promise<void> {
       return handleMessageInput(ctx, String(state.payload.username ?? ''), text);
     case 'admin_broadcast_text':
       return handleBroadcastInput(ctx, text);
+    case 'review_text':
+      return handleReviewText(ctx, Number(state.payload.rating ?? 0), text);
     default:
       await clearState(env, chatId);
       return reply(ctx, 'Отправьте /start, чтобы открыть меню.');

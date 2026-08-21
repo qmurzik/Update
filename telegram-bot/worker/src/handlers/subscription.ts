@@ -12,17 +12,14 @@ export async function showSubscription(ctx: Ctx): Promise<void> {
   const lines = ['<b>⭐ Моя подписка</b>', DIVIDER, ''];
 
   if (!sub.plan || sub.plan === 'none') {
-    lines.push('У вас нет активной подписки.');
+    lines.push('<blockquote>У вас нет активной подписки.</blockquote>');
+  } else if (sub.active) {
+    lines.push(`<blockquote>🟢 <b>Активна</b> · осталось ${daysRu(sub.days_left)}</blockquote>`);
+    if (sub.days_left <= 3) lines.push('', '⚠️ Подписка скоро закончится — продлите её заранее.');
+    lines.push('', `Тариф: <b>${esc(sub.plan)}</b>`, `Дата окончания: ${esc(sub.expires_text)}`);
   } else {
-    lines.push(`Тариф: <b>${esc(sub.plan)}</b>`);
-    lines.push(`Статус: ${sub.active ? '🟢 активна' : '🔴 истекла'}`);
-    lines.push(`Дата окончания: ${esc(sub.expires_text)}`);
-    if (sub.active) {
-      lines.push(`Осталось: ${daysRu(sub.days_left)}`);
-      if (sub.days_left <= 3) lines.push('', '⚠️ Подписка скоро закончится — продлите её заранее.');
-    } else {
-      lines.push('', '❗️ Подписка закончилась. Продлите её, чтобы восстановить доступ.');
-    }
+    lines.push(`<blockquote>🔴 <b>Истекла</b> ${esc(sub.expires_text)}</blockquote>`);
+    lines.push('', '❗️ Продлите подписку, чтобы восстановить доступ.', '', `Тариф: <b>${esc(sub.plan)}</b>`);
   }
 
   await reply(ctx, lines.join('\n'), subscriptionKeyboard(ctx.env));

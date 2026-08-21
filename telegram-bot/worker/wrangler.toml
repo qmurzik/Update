@@ -35,3 +35,6 @@ QMODS_SUBSCRIBE_URL = "https://qmods.ru/subscribe/"
 QMODS_SUPPORT_URL = "https://qmods.ru/mod/support.php"
 # Список Telegram ID администраторов через запятую.
 ADMIN_TELEGRAM_IDS = "5110155633"
+# Публичный URL этого же воркера + /app (Mini App). Подставь свой, если
+# домен воркера отличается — иначе кнопка "Открыть в Mini App" не покажется.
+WEBAPP_URL = "https://update.qmurzik7.workers.dev/app"

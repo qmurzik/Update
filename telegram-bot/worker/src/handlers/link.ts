@@ -12,7 +12,7 @@ const LINK_RATE_WINDOW = 600; // 10 минут
 export async function startLink(ctx: Ctx): Promise<void> {
   const me = await ctx.api.me(ctx.telegramId);
   if (me.linked) {
-    await reply(ctx, `Аккаунт уже привязан: <b>${esc(me.user?.username ?? '')}</b>.`, mainMenu(true, false));
+    await reply(ctx, `Аккаунт уже привязан: <b>${esc(me.user?.username ?? '')}</b>.`, mainMenu(ctx.env, true, false));
     return;
   }
 

@@ -147,6 +147,68 @@ exit;
 Старый способ (набрать `/link` в боте и прислать код текстом) продолжает
 работать как запасной вариант — ничего в боте для этого менять не нужно.
 
+## Предложить привязку Telegram при входе в кабинет
+
+⚠️ Это работает только для входа через **веб** (`login.php` без
+`device_id`). Вход из приложения уходит через `app_callback.php?...&app=1`,
+а по комментарию в самом файле это приложение перехватывает ещё до
+рендера HTML — серверная подсказка там физически не будет показана.
+Показать её в приложении можно только изменив само Android-приложение,
+исходников которого нет в этом репозитории.
+
+### 1. Тост сразу после входа
+
+В `mod/login.php` найдите успешный веб-вход (после блока с редиректом на
+`app_callback.php`, перед `redirect('cabinet.php')`):
+
+```php
+// Было:
+            if ($device_id !== '') {
+                redirect('app_callback.php?status=ok&username=' . urlencode($user['username']) . '&expires_at=' . $sub['expires_at'] . '&app=1');
+            }
+            redirect('cabinet.php');
+```
+
+```php
+// Стало:
+            if ($device_id !== '') {
+                redirect('app_callback.php?status=ok&username=' . urlencode($user['username']) . '&expires_at=' . $sub['expires_at'] . '&app=1');
+            }
+            if (empty($user['telegram_id'])) {
+                flash('info', '🤖 Совет: привяжите Telegram — управляйте подпиской и получайте уведомления в боте QMods.');
+            }
+            redirect('cabinet.php');
+```
+
+Веток с `redirect()` до этой точки не выполняется дальше (`redirect()` сам
+делает `exit`), поэтому проверка `$device_id !== ''` тут не нужна — до неё
+просто не доходит выполнение при входе из приложения.
+
+### 2. Постоянный баннер в кабинете, пока не привязано
+
+Раздел «Telegram» в `cabinet.php` сейчас спрятан в свёрнутый `<details>` —
+именно из-за этого его было не найти в прошлый раз. Добавьте баннер над
+уже существующим «Нужна помощь?» (`class="support-cta support-cta-top"`,
+там же используется `<a href="support.php">`):
+
+```php
+<?php if (empty($user['telegram_id'])): ?>
+<a class="support-cta support-cta-top" href="#telegram"
+   onclick="var d=document.querySelector('#telegram details'); if (d) d.open = true;"
+   style="background:linear-gradient(135deg,#3157ff,#7c3aed)">
+    <span class="support-cta-icon">🤖</span>
+    <div><b>Привяжите Telegram</b><small>Подписка, устройства и уведомления — прямо в боте QMods</small></div>
+    <strong aria-hidden="true">→</strong>
+</a>
+<?php endif; ?>
+```
+
+`id="telegram"` стоит на обёртке `<section>`, а не на самом `<details>`,
+поэтому браузер сам его не раскрыл бы (`:target` работает только когда
+`<details>` — предок цели, а тут наоборот) — отсюда `onclick`, который
+раскрывает блок явно. Баннер пропадает автоматически, как только
+`telegram_id` появится у пользователя.
+
 ## Ничего не сломается, если интеграцию не делать
 
 Все перечисленные вызовы `notify_user_event()` — не обязательны для работы
