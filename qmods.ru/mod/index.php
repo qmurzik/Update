@@ -97,22 +97,23 @@ render_header('QMods', ['user' => $user]);
       </div>
 
       <div class="cy-hero-kira">
-        <div class="kira-frame">
-          <img src="assets/kira-hero.webp" alt="Kira — цифровой ассистент QMODS" width="880" height="1100" fetchpriority="high">
-          <span class="bracket tl"></span><span class="bracket tr"></span>
-          <span class="bracket bl"></span><span class="bracket br"></span>
-          <div class="kira-plate">
-            <img src="assets/kira-avatar.webp" alt="" width="40" height="40">
-            <div><b>KIRA</b><small>AI ASSISTANT</small></div>
-            <span class="kira-online">ONLINE</span>
+        <div class="kira-stage">
+          <span class="kira-orbit" aria-hidden="true"></span>
+          <img class="kira-art" src="assets/kira/home.webp"
+               alt="Kira — цифровой ассистент QMODS" width="293" height="381" fetchpriority="high">
+
+          <div class="kira-chip kc1" data-parallax="0.04">
+            <em>✓</em><div><b>Доступ защищён</b><small>проверка на сервере</small></div>
+          </div>
+          <div class="kira-chip kc2" data-parallax="0.07">
+            <em>◈</em><div><b>1 устройство</b><small>привязка аккаунта</small></div>
           </div>
         </div>
 
-        <div class="kira-chip kc1" data-parallax="0.04">
-          <em>✓</em><div><b>Доступ защищён</b><small>проверка на сервере</small></div>
-        </div>
-        <div class="kira-chip kc2" data-parallax="0.07">
-          <em>◈</em><div><b>1 устройство</b><small>привязка аккаунта</small></div>
+        <div class="kira-plate">
+          <img src="assets/kira/avatar.webp" alt="" width="36" height="36">
+          <div><b>KIRA</b><small>AI ASSISTANT</small></div>
+          <span class="kira-online">ONLINE</span>
         </div>
 
         <div class="kira-say">
@@ -198,7 +199,11 @@ render_header('QMods', ['user' => $user]);
   <section class="lnd-section" id="kira">
     <div class="cy-band" data-reveal>
       <div class="cy-band-art">
-        <img src="assets/kira-card.webp" alt="Kira — цифровой ассистент QMODS" width="560" height="700" loading="lazy">
+        <div class="kira-stage">
+          <span class="kira-orbit" aria-hidden="true"></span>
+          <img class="kira-art" src="assets/kira/neutral.webp"
+               alt="Kira — цифровой ассистент QMODS" width="242" height="314" loading="lazy">
+        </div>
       </div>
       <div class="cy-band-copy">
         <span class="eyebrow">// Цифровой ассистент</span>
@@ -295,15 +300,21 @@ render_header('QMods', ['user' => $user]);
         </div>
       </div>
 
-      <div class="cy-progress" aria-hidden="true">
+      <div class="cy-launcher-side">
+        <div class="kira-stage" aria-hidden="true">
+          <img class="kira-art" src="assets/kira/mobile.webp" alt="" width="259" height="314" loading="lazy">
+        </div>
+
+        <div class="cy-progress" aria-hidden="true">
         <div class="cy-progress-top">
           <b>qmods-app.apk</b>
           <span><?= $releaseVersion !== '' ? 'v' . e($releaseVersion) : 'latest' ?></span>
         </div>
         <div class="cy-progress-rail"><i></i></div>
-        <div class="cy-progress-meta">
-          <span>ПРОВЕРКА ПОДПИСИ</span>
-          <span>SECURE CHANNEL</span>
+          <div class="cy-progress-meta">
+            <span>ПРОВЕРКА ПОДПИСИ</span>
+            <span>SECURE CHANNEL</span>
+          </div>
         </div>
       </div>
     </div>

@@ -212,7 +212,11 @@ render_header('Кабинет', ['user' => $user]);
         <span class="hero-chip">С нами с <b><?= e($created) ?></b></span>
       </div>
     </div>
-    <div class="dash-hero-avatar" aria-hidden="true"><b><?= e($firstLetter) ?></b></div>
+    <div class="dash-hero-kira" aria-hidden="true">
+      <div class="kira-stage">
+        <img class="kira-art" src="assets/kira/cabinet.webp" alt="" width="317" height="358">
+      </div>
+    </div>
   </section>
 
   <!-- ══ Доступ ══ -->
@@ -267,7 +271,7 @@ render_header('Кабинет', ['user' => $user]);
   }
   ?>
   <section class="kira-widget hud">
-    <img class="kira-widget-ava" src="assets/kira-avatar.webp" alt="Kira" width="58" height="58" loading="lazy">
+    <img class="kira-widget-ava" src="assets/kira/avatar.webp" alt="Kira" width="58" height="58" loading="lazy">
     <div class="kira-widget-body">
       <span class="eyebrow">// KIRA · AI ASSISTANT</span>
       <p class="kira-widget-say"><span data-type="<?= e(implode('|', $kiraLines)) ?>"></span><i></i></p>
@@ -425,7 +429,10 @@ render_header('Кабинет', ['user' => $user]);
     </div>
     <div class="list-panel">
       <?php if (!$payments): ?>
-        <div class="empty-state">Платежей пока нет</div>
+        <div class="empty-state with-kira">
+          <div class="kira-stage"><img class="kira-art" src="assets/kira/empty.webp" alt="" width="221" height="296" loading="lazy"></div>
+          <span>Платежей пока нет</span>
+        </div>
       <?php else: foreach ($payments as $p): ?>
         <div class="list-row">
           <span class="row-icon">₽</span>
@@ -447,7 +454,10 @@ render_header('Кабинет', ['user' => $user]);
     </div>
     <div class="notification-stack">
       <?php if (!$visible): ?>
-        <div class="empty-state">Новых уведомлений нет</div>
+        <div class="empty-state with-kira">
+          <div class="kira-stage"><img class="kira-art" src="assets/kira/empty.webp" alt="" width="221" height="296" loading="lazy"></div>
+          <span>Новых уведомлений нет</span>
+        </div>
       <?php else: foreach (array_slice($visible, 0, 5) as $n): ?>
         <article class="notice-row">
           <span class="notice-dot" aria-hidden="true"></span>

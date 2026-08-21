@@ -64,13 +64,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && csrf_ok()) {
 render_header('Конфликт устройств');
 ?>
 <div class="state-screen tone-warning">
-  <section class="state-card">
-    <div class="state-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-        <rect x="4" y="2.5" width="16" height="19" rx="3"/>
-        <line x1="10" y1="18.5" x2="14" y2="18.5"/>
-        <line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="14.6" x2="12.01" y2="14.6"/>
-      </svg>
+  <section class="state-card has-kira">
+    <div class="state-kira" aria-hidden="true">
+      <div class="kira-stage">
+        <img class="kira-art" src="assets/kira/error.webp" alt="" width="239" height="331">
+      </div>
     </div>
 
     <h1>Другое устройство</h1>

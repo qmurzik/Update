@@ -80,6 +80,12 @@ render_header('Поддержка', ['user' => $user]);
 
   <div style="margin-bottom:14px"><a href="cabinet.php" class="soft-cta btn-sm">← Вернуться в кабинет</a></div>
 
+  <div class="support-kira" aria-hidden="true">
+    <div class="kira-stage">
+      <img class="kira-art" src="assets/kira/support.webp" alt="" width="310" height="331">
+    </div>
+  </div>
+
   <section class="support-hero">
     <div class="support-icon">🆘</div>
     <div>

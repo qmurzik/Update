@@ -8,12 +8,11 @@ $message = $_GET['message'] ?? '';
 render_header('Уведомление', ['is_admin' => false]);
 ?>
 <div class="state-screen tone-iris">
-  <section class="state-card">
-    <div class="state-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-      </svg>
+  <section class="state-card has-kira">
+    <div class="state-kira" aria-hidden="true">
+      <div class="kira-stage">
+        <img class="kira-art" src="assets/kira/neutral.webp" alt="" width="242" height="314">
+      </div>
     </div>
 
     <h1><?= e($title) ?></h1>

@@ -112,15 +112,14 @@ render_header('Регистрация');
     <a class="au-brand" href="index.php"><span>Q</span>QMODS</a>
 
     <div class="au-visual" aria-hidden="true">
-      <div class="kira-frame">
-        <img src="assets/kira-hero.webp" alt="" width="880" height="1100">
-        <span class="bracket tl"></span><span class="bracket tr"></span>
-        <span class="bracket bl"></span><span class="bracket br"></span>
-        <div class="kira-plate">
-          <img src="assets/kira-avatar.webp" alt="" width="34" height="34">
-          <div><b>KIRA</b><small>AI ASSISTANT</small></div>
-          <span class="kira-online">ONLINE</span>
-        </div>
+      <div class="kira-stage">
+        <span class="kira-orbit"></span>
+        <img class="kira-art" src="assets/kira/register.webp" alt="" width="296" height="364">
+      </div>
+      <div class="kira-plate">
+        <img src="assets/kira/avatar.webp" alt="" width="32" height="32">
+        <div><b>KIRA</b><small>AI ASSISTANT</small></div>
+        <span class="kira-online">ONLINE</span>
       </div>
     </div>
 

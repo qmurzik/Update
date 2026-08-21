@@ -46,14 +46,14 @@ if ($order && $user && strtolower((string)$order['username_lower']) === strtolow
   <main class="result">
     <section class="result-card <?= e($status) ?>">
       <?php if ($status === 'success'): ?>
-        <div class="result-icon">✓</div>
+        <div class="result-kira"><img src="/mod/assets/kira/success.webp" alt="Kira" width="284" height="322"></div>
         <h1>Оплата прошла</h1>
         <p>Тариф «<?= e((string)($order['plan'] ?? '')) ?>» активирован.<br>Доступ действует до <b><?= e($sub['expires_text'] ?? '—') ?></b>.</p>
         <a class="result-btn" href="/mod/cabinet.php">Вернуться в кабинет →</a>
         <script>window.addEventListener('load',function(){if(window.qmodsConfetti)window.qmodsConfetti(110);});</script>
 
       <?php elseif ($status === 'pending'): ?>
-        <div class="result-icon">⏳</div>
+        <div class="result-kira"><img src="/mod/assets/kira/loading.webp" alt="Kira" width="238" height="306"></div>
         <h1>Платёж обрабатывается</h1>
         <p>ЮMoney ещё не передал подтверждение. Обычно это занимает несколько секунд — мы проверим статус автоматически.</p>
         <a class="result-btn" href="/subscribe/success.php?label=<?= rawurlencode($label) ?>">Проверить ещё раз</a>
@@ -61,13 +61,13 @@ if ($order && $user && strtolower((string)$order['username_lower']) === strtolow
         <script>setTimeout(function(){location.reload();},4000)</script>
 
       <?php elseif ($status === 'login'): ?>
-        <div class="result-icon">→</div>
+        <div class="result-kira"><img src="/mod/assets/kira/login.webp" alt="Kira" width="267" height="382"></div>
         <h1>Войдите в аккаунт</h1>
         <p>Для просмотра результата оплаты нужно войти в QMods.</p>
         <a class="result-btn" href="/mod/login.php">Войти в QMods →</a>
 
       <?php else: ?>
-        <div class="result-icon">!</div>
+        <div class="result-kira"><img src="/mod/assets/kira/error.webp" alt="Kira" width="239" height="331"></div>
         <h1>Не удалось найти заказ</h1>
         <p>Проверьте, что вы открыли ссылку из этого платежа и вошли в правильный аккаунт.</p>
         <a class="result-btn" href="/mod/cabinet.php">В кабинет →</a>
