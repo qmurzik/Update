@@ -18,8 +18,15 @@ object Constants {
     const val VK_ID_AUTHORIZE_URL = "https://id.vk.com/authorize"
     const val VK_ID_TOKEN_URL = "https://id.vk.com/oauth2/auth"
 
-    /** vk.com/dev/permissions — the exact set of rights QVK asks for at login. */
-    const val VK_AUTH_SCOPE = "friends,photos,wall,groups,messages,video,docs,notifications,stats,offline"
+    /**
+     * vk.com/dev/permissions — the exact set of rights QVK asks for at login. VK ID's `scope`
+     * param follows the OAuth 2.1 standard (space-separated) — NOT the classic VK API's
+     * comma-separated format. Sending commas here means VK ID sees one long unrecognized scope
+     * token and silently falls back to whatever minimal default it grants, which is exactly what
+     * produced "Access denied: ... It cannot be called with current scopes" on every method
+     * beyond basic profile/wall/friends/photos.
+     */
+    const val VK_AUTH_SCOPE = "friends photos wall groups messages video docs notifications stats offline"
 
     const val DEFAULT_PAGE_SIZE = 20
     const val DATABASE_NAME = "qvk.db"
