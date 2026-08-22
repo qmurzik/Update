@@ -16,7 +16,7 @@ kotlinx.serialization · Room · Hilt · Coil · Media3 ExoPlayer · Navigation 
 
 | Раздел | Статус |
 |---|---|
-| Авторизация VK OAuth (WebView, Standalone-flow), сохранение сессии, мультиаккаунт | ✅ |
+| Авторизация VK ID (WebView, OAuth 2.1 + PKCE), сохранение сессии, мультиаккаунт | ✅ |
 | Лента: пагинация (Paging 3, курсор `next_from`), pull-to-refresh, офлайн-кеш первой страницы (Room) | ✅ |
 | Посты: фото/видео/документы/ссылки/опросы/репосты, лайки, комментарии, репост, сохранение, скрытие источника, жалоба | ✅ |
 | Профиль: аватар, статистика, стена (пагинация по offset), друзья, фото | ✅ |
@@ -70,18 +70,29 @@ QVK не может использовать общий `client_id` — VK пр�
 приложению, и общий ключ либо не будет работать, либо будет заблокирован при первом же
 всплеске трафика. Чтобы получить свой:
 
-1. Зайдите на https://vk.com/apps?act=manage и создайте приложение типа **Standalone-приложение**
-   (или «VK ID для приложения», в зависимости от текущего интерфейса VK).
-2. Скопируйте **Client ID**.
+1. Зайдите на https://vk.com/apps?act=manage и создайте приложение (мобильное/нативное).
+2. Скопируйте **Client ID (App ID)**.
 3. Передайте его в сборку одним из способов:
-   - в `local.properties` (не коммитится): `VK_CLIENT_ID=12345678`, затем в `app/build.gradle.kts`
-     проксируется как Gradle-свойство — либо просто передайте флагом:
-     `./gradlew assembleDebug -PVK_CLIENT_ID=12345678`
-   - или пропишите в `~/.gradle/gradle.properties`: `VK_CLIENT_ID=12345678`.
-4. Redirect URI, который нужно указать в настройках VK-приложения: `vk<ваш_client_id>://authorize`
+   - пропишите в `QVK/gradle.properties` (уже сделано для тестового ID) или в
+     `~/.gradle/gradle.properties`: `VK_CLIENT_ID=12345678`;
+   - или флагом: `./gradlew assembleDebug -PVK_CLIENT_ID=12345678`.
+4. Redirect URI, который нужно указать в настройках приложения (VK ID): `vk<ваш_client_id>://vk.ru/blank.html`
+   — именно в таком виде, никакой другой формат для нативных приложений VK ID не принимает
    (QVK формирует его сам через `manifestPlaceholders`, см. `app/build.gradle.kts`).
 
 Без `VK_CLIENT_ID` экран входа корректно покажет предупреждение (`login_no_client_id`), а не упадёт.
+
+### Важно: VK ID, а не классический OAuth
+
+Ранние версии этого README и кода использовали классический `oauth.vk.com/authorize`
+(Standalone-flow, `response_type=token`). VK перевёл платформу на **VK ID** — OAuth 2.1 + PKCE
+через `id.vk.com` — и старый эндпоинт для новых приложений теперь возвращает
+`{"error":"invalid_request","error_description":"application is disabled"}` независимо от
+настроек приложения: это не баг конфигурации, эндпоинт закрыт для новых client_id. QVK уже
+переведён на VK ID (`feature/auth/data/OAuthRedirectParser.kt` — генерация PKCE code_verifier/
+code_challenge, `id.vk.com/authorize` для авторизации, `POST id.vk.com/oauth2/auth` для обмена
+кода на токен). Если VK в будущем снова поменяет протокол — экран входа корректно покажет текст
+ошибки от сервера вместо падения приложения.
 
 ## Сборка
 

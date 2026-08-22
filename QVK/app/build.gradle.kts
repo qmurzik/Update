@@ -26,7 +26,8 @@ android {
         val vkClientId = (project.findProperty("VK_CLIENT_ID") as String?) ?: "0"
         buildConfigField("String", "VK_CLIENT_ID", "\"$vkClientId\"")
         buildConfigField("String", "VK_API_VERSION", "\"5.199\"")
-        buildConfigField("String", "VK_REDIRECT_URI", "\"vk$vkClientId://authorize\"")
+        // VK ID requires this exact native-app redirect format: vk<client_id>://vk.ru/blank.html
+        buildConfigField("String", "VK_REDIRECT_URI", "\"vk$vkClientId://vk.ru/blank.html\"")
         manifestPlaceholders["vkAuthScheme"] = "vk$vkClientId"
     }
 

@@ -43,12 +43,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- VK OAuth implicit-flow redirect, e.g. vk12345678://authorize -->
+            <!-- VK ID OAuth 2.1/PKCE redirect, e.g. vk12345678://vk.ru/blank.html -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${vkAuthScheme}" android:host="authorize" />
+                <data android:scheme="${vkAuthScheme}" android:host="vk.ru" android:path="/blank.html" />
             </intent-filter>
         </activity>
 
