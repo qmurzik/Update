@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.qvk.app.R
 import com.qvk.app.core.model.Community
 import com.qvk.app.core.ui.components.EmptyState
+import com.qvk.app.core.ui.components.ErrorState
 import com.qvk.app.core.ui.components.QvkAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +37,7 @@ fun CommunitiesScreen(
     val query by viewModel.query.collectAsState()
     val myGroups by viewModel.myGroups.collectAsState()
     val results by viewModel.searchResults.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_communities)) }) }) { padding ->
         androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(padding)) {
@@ -48,7 +50,9 @@ fun CommunitiesScreen(
             )
 
             val shown = if (query.isBlank()) myGroups else results
-            if (shown.isEmpty()) {
+            if (shown.isEmpty() && query.isBlank() && error != null) {
+                ErrorState(error!!, onRetry = viewModel::refresh)
+            } else if (shown.isEmpty()) {
                 EmptyState(if (query.isBlank()) "Вы пока не подписаны на сообщества" else "Ничего не найдено")
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {

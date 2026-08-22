@@ -31,9 +31,18 @@ class CommunitiesViewModel @Inject constructor(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init { refresh() }
 
-    fun refresh() = viewModelScope.launch { repository.refreshMyGroups() }
+    fun refresh() = viewModelScope.launch {
+        when (val result = repository.refreshMyGroups()) {
+            is Resource.Error -> _error.value = result.message
+            is Resource.Success -> _error.value = null
+            Resource.Loading -> Unit
+        }
+    }
 
     fun onQueryChange(value: String) {
         _query.value = value

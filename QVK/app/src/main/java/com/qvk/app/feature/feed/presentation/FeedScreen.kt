@@ -81,8 +81,10 @@ fun FeedScreen(
             when {
                 isFirstLoad && cached.isNotEmpty() -> FeedList(cached, viewModel, onOpenPost, onOpenAuthor, onOpenVideo)
                 isFirstLoad -> LazyColumn { items(6) { PostCardSkeleton() } }
-                items.loadState.refresh is LoadState.Error && items.itemCount == 0 ->
-                    ErrorState("Не удалось загрузить ленту", onRetry = { items.retry() })
+                items.loadState.refresh is LoadState.Error && items.itemCount == 0 -> {
+                    val message = (items.loadState.refresh as LoadState.Error).error.message ?: "Не удалось загрузить ленту"
+                    ErrorState(message, onRetry = { items.retry() })
+                }
                 items.itemCount == 0 -> EmptyState(title = "Лента пуста", subtitle = "Подпишитесь на друзей и сообщества")
                 else -> FeedPagingList(items, viewModel, onOpenPost, onOpenAuthor, onOpenVideo)
             }

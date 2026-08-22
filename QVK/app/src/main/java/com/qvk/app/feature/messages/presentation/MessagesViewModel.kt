@@ -2,6 +2,7 @@ package com.qvk.app.feature.messages.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.qvk.app.core.common.Resource
 import com.qvk.app.core.model.Conversation
 import com.qvk.app.feature.messages.data.MessagesRepository
 import com.qvk.app.feature.messages.data.longpoll.LongPollEvent
@@ -25,6 +26,9 @@ class MessagesViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(true)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         refresh()
         viewModelScope.launch {
@@ -38,7 +42,11 @@ class MessagesViewModel @Inject constructor(
 
     fun refresh() = viewModelScope.launch {
         _isRefreshing.value = true
-        repository.refreshConversations()
+        when (val result = repository.refreshConversations()) {
+            is Resource.Error -> _error.value = result.message
+            is Resource.Success -> _error.value = null
+            Resource.Loading -> Unit
+        }
         _isRefreshing.value = false
     }
 }

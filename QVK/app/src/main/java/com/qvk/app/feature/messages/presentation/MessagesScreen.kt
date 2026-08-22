@@ -26,6 +26,7 @@ import com.qvk.app.R
 import com.qvk.app.core.common.formatRelativeTime
 import com.qvk.app.core.model.Conversation
 import com.qvk.app.core.ui.components.EmptyState
+import com.qvk.app.core.ui.components.ErrorState
 import com.qvk.app.core.ui.components.QvkAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +37,7 @@ fun MessagesScreen(
 ) {
     val conversations by viewModel.conversations.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_messages)) }) }) { padding ->
         PullToRefreshBox(
@@ -43,7 +45,9 @@ fun MessagesScreen(
             onRefresh = viewModel::refresh,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            if (conversations.isEmpty() && !isRefreshing) {
+            if (conversations.isEmpty() && error != null && !isRefreshing) {
+                ErrorState(error!!, onRetry = viewModel::refresh)
+            } else if (conversations.isEmpty() && !isRefreshing) {
                 EmptyState("Сообщений пока нет")
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
