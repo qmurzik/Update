@@ -250,7 +250,7 @@ if ($action === 'issue') {
     }
 
     $expiresAt = 0;
-    $message = '';
+    $useDays = false;
 
     if ($expiresDate !== '') {
         $timestamp = strtotime($expiresDate . ' 23:59:59');
@@ -258,34 +258,48 @@ if ($action === 'issue') {
             bot_json(['success' => false, 'error' => 'Неверный формат даты.'], 400);
         }
         $expiresAt = $timestamp;
-        $message = "Подписка {$username} продлена до " . date('d.m.Y', $expiresAt);
     } elseif ($days >= 1 && $days <= 3650) {
-        $expiresAt = time() + ($days * 86400);
-        $message = "Подписка {$username} продлена на {$days} дн. до " . date('d.m.Y', $expiresAt);
+        $useDays = true;
     } else {
         bot_json(['success' => false, 'error' => 'Укажите дни или дату.'], 400);
     }
 
-    [$ok, $result] = update_users(function (array $users) use ($username, $expiresAt, $plan, $create): array {
+    // Для продления по дням отсчитываем от ТЕКУЩЕГО окончания подписки
+    // (а не от "сейчас"), иначе у пользователя с ещё активной подпиской
+    // "+N дней" стирает уже оплаченный остаток вместо того, чтобы его
+    // нарастить — этот $finalExpiresAt заполняется внутри замыкания, где
+    // виден текущий expires_at пользователя.
+    $finalExpiresAt = null;
+
+    [$ok, $result] = update_users(function (array $users) use ($username, $expiresAt, $plan, $create, $useDays, $days, &$finalExpiresAt): array {
         $found = false;
         foreach ($users as &$user) {
             if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
                 $found = true;
                 $user['subscription']['plan'] = $plan;
-                $user['subscription']['expires_at'] = $expiresAt;
+                if ($useDays) {
+                    $currentExpiresAt = (int)($user['subscription']['expires_at'] ?? 0);
+                    $base = max(time(), $currentExpiresAt);
+                    $user['subscription']['expires_at'] = $base + ($days * 86400);
+                } else {
+                    $user['subscription']['expires_at'] = $expiresAt;
+                }
+                $finalExpiresAt = $user['subscription']['expires_at'];
                 break;
             }
         }
         unset($user);
 
         if (!$found && $create) {
+            $newExpiresAt = $useDays ? (time() + ($days * 86400)) : $expiresAt;
+            $finalExpiresAt = $newExpiresAt;
             $users[] = [
                 'id' => bin2hex(random_bytes(16)),
                 'username' => $username,
                 'username_lower' => strtolower(trim($username)),
                 'created_at' => time(),
                 'device_id' => '',
-                'subscription' => ['plan' => $plan, 'expires_at' => $expiresAt],
+                'subscription' => ['plan' => $plan, 'expires_at' => $newExpiresAt],
                 'payments' => [],
             ];
             return [$users, ['success' => true, 'created' => true]];
@@ -299,6 +313,10 @@ if ($action === 'issue') {
 
     if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
     if (!empty($result['error'])) bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    $message = $useDays
+        ? "Подписка {$username} продлена на {$days} дн. до " . date('d.m.Y', $finalExpiresAt)
+        : "Подписка {$username} продлена до " . date('d.m.Y', $finalExpiresAt);
 
     log_action("Telegram API issue: {$username}");
     notify_user_event(strtolower($username), '⭐ Подписка обновлена', $message);
