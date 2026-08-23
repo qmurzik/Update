@@ -47,10 +47,10 @@ export default {
       // about:blank when PUBLIC_URL isn't set yet — the onerror handlers on
       // each <img> hide it cleanly rather than showing a broken-image icon.
       const img = (name: string) => kiraImage(env, name) ?? 'about:blank';
-      const html = APP_HTML.replace('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
-        .replace('__KIRA_HERO__', img('kira-hero.webp'))
-        .replace('__KIRA_LOADING__', img('kira-loading.webp'))
-        .replace('__KIRA_EMPTY__', img('kira-empty.webp'));
+      const html = APP_HTML.replaceAll('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
+        .replaceAll('__KIRA_HERO__', img('kira-hero.webp'))
+        .replaceAll('__KIRA_LOADING__', img('kira-loading.webp'))
+        .replaceAll('__KIRA_EMPTY__', img('kira-empty.webp'));
       return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
     if (url.pathname === '/app/api') {
