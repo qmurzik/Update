@@ -13,6 +13,11 @@ if (is_file(__DIR__ . '/includes/reviews.php')) {
     }
 }
 
+if (is_file(__DIR__ . '/includes/referrals.php')) {
+    require_once __DIR__ . '/includes/referrals.php';
+    if (isset($_GET['ref'])) ref_remember((string)$_GET['ref']);
+}
+
 $landingPlans = [];
 if (!defined('PLANS') && is_file(__DIR__ . '/../subscribe/config.php')) {
     @require_once __DIR__ . '/../subscribe/config.php';

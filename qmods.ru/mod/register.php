@@ -2,6 +2,7 @@
 require __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/telegram.php';
 require_once __DIR__ . '/includes/shutdown.php';
+require_once __DIR__ . '/includes/referrals.php';
 
 if (is_logged_in()) redirect('cabinet.php');
 if (is_shutdown()) { redirect('login.php'); exit; }
@@ -9,7 +10,11 @@ if (is_shutdown()) { redirect('login.php'); exit; }
 $device_id = trim((string)($_REQUEST['device_id'] ?? ''));
 $client_ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
 
-$ref = trim((string)($_GET['ref'] ?? ''));
+// Код из ссылки запоминаем сразу: иначе он теряется при переходе
+// на вход и обратно, а из приложения его в URL вообще нет.
+if (isset($_GET['ref'])) ref_remember((string)$_GET['ref']);
+$ref = ref_current();
+$refError = false;
 
 function make_ref_code(array $users): string {
     do {
@@ -27,7 +32,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $username = trim((string)($_POST['username'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
         $repeat   = (string)($_POST['repeat_password'] ?? '');
-        $ref      = trim((string)($_POST['ref'] ?? ''));
+        $ref      = ref_current();
 
         if (!validate_username($username)) {
             flash('error', 'Некорректный ник. 3-32 символа: буквы, цифры, _ - .');
@@ -52,9 +57,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 } else {
                     $referred_by = '';
                     if ($ref !== '') {
-                        foreach ($users as $u) if (($u['ref_code'] ?? '') === $ref) { $referred_by = (string)$u['username']; break; }
+                        $owner = ref_find_owner($users, $ref);
+                        if ($owner === null) {
+                            // Молча терять приглашение нельзя — сообщаем и даём исправить.
+                            $refError = true;
+                            flash('error', 'Код приглашения «' . e($ref) . '» не найден. Проверьте его или очистите поле.');
+                            log_action("Register: unknown ref code {$ref} ({$username})");
+                        } else {
+                            $referred_by = (string)$owner['username'];
+                        }
                     }
 
+                    if (!$refError) {
                     $newUser = [
                         'id' => bin2hex(random_bytes(16)),
                         'username' => $username,
@@ -94,15 +108,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                         trial_fraud_mark($device_id, $client_ip, (string)$newUser['id']);
                         log_action("Register: {$username}" . ($referred_by ? " (ref: {$referred_by})" : ''));
                         tg_notify_register($username, $referred_by);
-                        flash('success', 'Аккаунт создан! Теперь войдите.');
+                        ref_forget();
+                        flash('success', $referred_by !== ''
+                            ? 'Аккаунт создан! Приглашение от ' . $referred_by . ' учтено. Теперь войдите.'
+                            : 'Аккаунт создан! Теперь войдите.');
                         redirect('login.php?device_id=' . urlencode($device_id));
                         exit;
+                    }
                     }
                 }
             }
         }
     }
 }
+
+$refOwner = $ref !== '' ? ref_find_owner(load_users(), $ref) : null;
 
 render_header('Регистрация');
 ?>
@@ -148,7 +168,6 @@ render_header('Регистрация');
 
     <form class="au-form" method="post" action="register.php?device_id=<?= e($device_id) ?>">
       <?= csrf_field() ?>
-      <input type="hidden" name="ref" value="<?= e($ref) ?>">
 
       <div class="au-field">
         <label for="reg-username">Придумай никнейм</label>
@@ -177,11 +196,31 @@ render_header('Регистрация');
         </div>
       </div>
 
-      <?php if ($ref !== ''): ?>
-      <div class="au-ref">
-        <span>↗</span>
-        <div><b>Приглашение активировано</b><small>Реферальный бонус будет учтён автоматически.</small></div>
+      <div class="au-field">
+        <label for="reg-ref">Код приглашения <em>— если есть</em></label>
+        <div class="au-input">
+          <b>↗</b>
+          <input id="reg-ref" type="text" name="ref" value="<?= e($ref) ?>" maxlength="12"
+                 autocomplete="off" spellcheck="false" placeholder="Например, 92946C">
+        </div>
       </div>
+
+      <?php if ($refOwner !== null): ?>
+        <div class="au-ref">
+          <span>↗</span>
+          <div>
+            <b>Приглашение от <?= e((string)$refOwner['username']) ?></b>
+            <small>После вашей первой оплаты другу начислим +<?= REF_BONUS_DAYS ?> дн.</small>
+          </div>
+        </div>
+      <?php elseif ($ref !== ''): ?>
+        <div class="au-ref au-ref-bad">
+          <span>!</span>
+          <div>
+            <b>Код «<?= e($ref) ?>» не найден</b>
+            <small>Проверьте код или очистите поле — без него регистрация тоже пройдёт.</small>
+          </div>
+        </div>
       <?php endif; ?>
 
       <button class="au-submit primary-cta" type="submit"><span>Создать пространство</span><b>→</b></button>
@@ -189,7 +228,7 @@ render_header('Регистрация');
 
     <div class="au-switch">
       <span>Уже есть профиль?</span>
-      <a href="login.php?device_id=<?= e($device_id) ?>">Войти</a>
+      <a href="login.php?device_id=<?= e($device_id) ?><?= $ref !== '' ? '&ref=' . urlencode($ref) : '' ?>">Войти</a>
     </div>
 
     <div class="au-note">

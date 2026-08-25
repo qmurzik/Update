@@ -3,6 +3,7 @@ require __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reminders.php';
 require_once __DIR__ . '/includes/achievements.php';
 require_once __DIR__ . '/includes/reviews.php';
+require_once __DIR__ . '/includes/referrals.php';
 require_once __DIR__ . '/subscribe/config.php';
 
 if (!defined('SUPPORT_GROUP_URL')) define('SUPPORT_GROUP_URL', 'https://t.me/qmurzik');
@@ -169,8 +170,8 @@ $deviceShort = $device_id !== '' ? substr($device_id, 0, 6) . '…' . substr($de
 $percent = $sub['active'] ? min(100, max(3, (int)round(($sub['days_left'] / 30) * 100))) : 0;
 $refLink = 'https://qmods.ru/mod/register.php?ref=' . urlencode((string)$user['ref_code']);
 
-$refCount = 0;
-foreach ($allUsers as $u) if (($u['referred_by'] ?? '') === $user['username']) $refCount++;
+$refStats = ref_stats($allUsers, (string)$user['username']);
+$refCount = $refStats['invited'];
 
 $payments = array_slice(array_reverse($user['payments'] ?? []), 0, 10);
 
@@ -400,13 +401,29 @@ render_header('Кабинет', ['user' => $user]);
   <section class="section-block split-section" id="referrals">
     <div class="feature-panel referral-panel">
       <span class="eyebrow">Рефералы</span>
-      <h2>+3 дня за друга</h2>
-      <p>Поделитесь ссылкой. После первой оплаты приглашённого пользователя вы получите бонус.</p>
+      <h2>+<?= REF_BONUS_DAYS ?> дня за друга</h2>
+      <p>Поделитесь ссылкой или продиктуйте код. Бонус начислится после первой оплаты приглашённого.</p>
       <div class="ref-row">
         <code><?= e($user['ref_code']) ?></code>
         <button type="button" class="copy-button" onclick="copyText('<?= e($refLink) ?>','Ссылка скопирована')">Копировать ссылку</button>
       </div>
-      <div class="panel-stat"><span>Приглашено</span><strong data-count="<?= (int)$refCount ?>">0</strong></div>
+      <div class="ref-stats">
+        <div><span>Приглашено</span><strong data-count="<?= (int)$refStats['invited'] ?>">0</strong></div>
+        <div><span>Оплатили</span><strong data-count="<?= (int)$refStats['paid'] ?>">0</strong></div>
+        <div><span>Начислено дней</span><strong data-count="<?= (int)$refStats['days'] ?>">0</strong></div>
+      </div>
+      <?php if ($refStats['invited'] > $refStats['paid']): ?>
+        <?php
+          $refPending = (int)($refStats['invited'] - $refStats['paid']);
+          $refTail = $refPending % 10;
+          $refWord = ($refPending % 100 >= 11 && $refPending % 100 <= 14) ? 'приглашённых ещё не оформили'
+                   : ($refTail === 1 ? 'приглашённый ещё не оформил'
+                   : ($refTail >= 2 && $refTail <= 4 ? 'приглашённых ещё не оформили' : 'приглашённых ещё не оформили'));
+        ?>
+        <p class="ref-note">
+          <?= $refPending ?> <?= $refWord ?> подписку — бонус за них придёт после первой оплаты.
+        </p>
+      <?php endif; ?>
     </div>
 
     <div class="feature-panel app-panel">

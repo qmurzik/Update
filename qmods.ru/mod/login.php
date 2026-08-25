@@ -2,9 +2,11 @@
 require __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reviews.php';
 require_once __DIR__ . '/includes/shutdown.php';
+require_once __DIR__ . '/includes/referrals.php';
 
 $c = cfg();
 $device_id = $_REQUEST['device_id'] ?? '';
+if (isset($_GET['ref'])) ref_remember((string)$_GET['ref']);
 
 function page_block(string $msg): void {
     header('Content-Type: text/html; charset=utf-8');
@@ -179,7 +181,7 @@ render_header('Вход');
 
     <div class="au-switch">
       <span>Первый раз?</span>
-      <a href="register.php?device_id=<?= e($device_id) ?>">Создать аккаунт</a>
+      <a href="register.php?device_id=<?= e($device_id) ?><?= ref_current() !== '' ? '&ref=' . urlencode(ref_current()) : '' ?>">Создать аккаунт</a>
     </div>
 
     <div class="au-note">
