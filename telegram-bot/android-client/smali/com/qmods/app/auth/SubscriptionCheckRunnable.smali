@@ -170,6 +170,12 @@
     :catch_all
     move-exception v0
 
+    const-string v2, "QModsAuth"
+
+    const-string v3, "subscription check failed"
+
+    invoke-static {v2, v3, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+
     const-string v1, "network_error"
 
     invoke-direct {p0, v1}, Lcom/qmods/app/auth/SubscriptionCheckRunnable;->postError(Ljava/lang/String;)V
