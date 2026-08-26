@@ -106,6 +106,30 @@
 
     if-nez v10, :success_ok
 
+    const-string v6, "revoked"
+
+    const/4 v7, 0x0
+
+    invoke-virtual {v9, v6, v7}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;Z)Z
+
+    move-result v10
+
+    if-eqz v10, :not_revoked
+
+    # Server says this device_token no longer resolves to an account (e.g.
+    # unlinked via the bot's "Устройства" section) — the saved token is
+    # dead, so wipe it locally too and report it the same as "never
+    # paired" rather than a generic server error, so the UI routes
+    # straight back to the pairing screen instead of a dead-end retry loop.
+    invoke-direct {p0}, Lcom/qmods/app/auth/SubscriptionCheckRunnable;->clearToken()V
+
+    const-string v6, "not_paired"
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/SubscriptionCheckRunnable;->postError(Ljava/lang/String;)V
+
+    return-void
+
+    :not_revoked
     const-string v6, "server_error"
 
     invoke-direct {p0, v6}, Lcom/qmods/app/auth/SubscriptionCheckRunnable;->postError(Ljava/lang/String;)V
@@ -188,6 +212,34 @@
 # invoke-direct, so this uses invoke-direct/range over a contiguous v0..v6
 # block instead (values moved in via move/move-object rather than reused
 # from scattered registers, since /range requires contiguous registers).
+.method private clearToken()V
+    .locals 3
+
+    iget-object v0, p0, Lcom/qmods/app/auth/SubscriptionCheckRunnable;->context:Landroid/content/Context;
+
+    const-string v1, "qmods_auth"
+
+    const/4 v2, 0x0
+
+    invoke-virtual {v0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+
+    move-result-object v0
+
+    invoke-interface {v0}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+
+    move-result-object v0
+
+    const-string v1, "device_token"
+
+    invoke-interface {v0, v1}, Landroid/content/SharedPreferences$Editor;->remove(Ljava/lang/String;)Landroid/content/SharedPreferences$Editor;
+
+    move-result-object v0
+
+    invoke-interface {v0}, Landroid/content/SharedPreferences$Editor;->apply()V
+
+    return-void
+.end method
+
 .method private postResult(ZILjava/lang/String;)V
     .locals 7
     .param p1, "active"    # Z

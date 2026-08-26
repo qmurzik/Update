@@ -169,7 +169,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
 
     const username = await getUsernameByDeviceToken(env, token);
-    if (!username) return jsonResponse({ success: false, error: 'Unknown or revoked device token' }, 401);
+    if (!username) return jsonResponse({ success: false, revoked: true, error: 'Unknown or revoked device token' }, 401);
 
     const api = new QmodsUserApi(env);
     const res = await api.subscriptionByUsername(username);
