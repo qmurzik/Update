@@ -3,6 +3,7 @@ import { confirmKeyboard, devicesKeyboard } from '../telegram/keyboards';
 import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
+import { revokeDeviceToken } from '../db';
 
 function fmtDate(ts: number): string {
   if (!ts) return '—';
@@ -57,5 +58,9 @@ export async function confirmRemoveDevice(ctx: Ctx): Promise<void> {
     await reply(ctx, `Не удалось отвязать устройство: ${esc(String(result.error ?? 'ошибка'))}`);
     return;
   }
+  // If this device was paired via the app's device-auth flow, device.id IS
+  // its device_token — revoke it too, otherwise unlinking here wouldn't
+  // actually cut the app's access (see db.ts revokeDeviceToken).
+  await revokeDeviceToken(ctx.env, device.id);
   await showDevices(ctx);
 }

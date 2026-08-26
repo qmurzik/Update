@@ -94,6 +94,16 @@ export class QmodsUserApi {
     return callApi(this.url, this.token, 'device_remove', { telegram_id: telegramId, device_id: deviceId }, 'POST');
   }
 
+  /**
+   * Registers a device_id on qmods.ru for a linked account — used by the
+   * device-auth handshake (see db.ts / handlers/devicePair.ts) right after
+   * a successful pairing claim, so the app shows up in the bot's/cabinet's
+   * "Устройства" section like any other device.
+   */
+  deviceRegister(telegramId: string, deviceId: string) {
+    return callApi(this.url, this.token, 'device_register', { telegram_id: telegramId, device_id: deviceId }, 'POST');
+  }
+
   notifications(telegramId: string) {
     return callApi<{ notifications: Array<{ id: string; title: string; message: string; created_at: number; unread: boolean }> }>(
       this.url,

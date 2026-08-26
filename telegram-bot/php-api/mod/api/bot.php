@@ -455,6 +455,45 @@ if ($action === 'device_remove') {
 }
 
 // ============================================================
+// DEVICE_REGISTER — привязывает device_id к аккаунту по telegram_id.
+// Вызывается ТОЛЬКО воркером — из хендшейка device-auth для нативного
+// приложения (см. worker/src/handlers/devicePair.ts), сразу после
+// успешной привязки через deep-link в бота. device_id здесь — это
+// device_token, который воркер выдал приложению, поэтому раздел
+// "Устройства" в боте/кабинете и обычное действие device_remove
+// работают с ним без каких-либо изменений.
+// ============================================================
+
+if ($action === 'device_register') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    $deviceId = trim((string)($req['device_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+    if ($deviceId === '') {
+        bot_json(['success' => false, 'error' => 'Invalid device_id'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($telegramId, $deviceId): array {
+        foreach ($users as &$u) {
+            if ((string)($u['telegram_id'] ?? '') !== $telegramId) continue;
+            $u['device_id'] = $deviceId;
+            $u['device_name'] = 'Android-приложение';
+            $u['device_added_at'] = time();
+            return [$users, ['success' => true]];
+        }
+        unset($u);
+        return [$users, ['error' => 'Not linked']];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Storage error'], 500);
+    if (($result['error'] ?? '') !== '') bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    log_action('Bot device_register: telegram_id ' . $telegramId);
+    bot_json(['success' => true]);
+}
+
+// ============================================================
 // NOTIFICATIONS — личные уведомления для раздела бота
 // ============================================================
 

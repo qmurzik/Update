@@ -146,6 +146,14 @@ expires_at, expires_text}}` — без id/платежей/устройства.
 оно авторизовано — оно знает только `device_token`, который резолвится в
 `username` на самом воркере (`GET /device/subscription`).
 
+### `device_register` (POST)
+**Параметры:** `telegram_id`, `device_id`. Тоже только server-to-server —
+вызывается воркером сразу после успешной привязки приложения через бота
+(`handlers/devicePair.ts`), с `device_id` = только что выданным
+`device_token`. Существующее действие `devices` затем видит это
+устройство как обычное — приложение появляется в разделе «Устройства»
+бота/кабинета, и штатное `device_remove` (по `device_id`) отвязывает его.
+
 ---
 
 ## Админский API (`mod/admin/bot.php`)

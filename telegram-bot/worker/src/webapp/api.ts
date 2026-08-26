@@ -1,7 +1,7 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
-import { checkRateLimit } from '../db';
+import { checkRateLimit, revokeDeviceToken } from '../db';
 import { reportError } from '../errorReport';
 import { extractInitData, validateInitData } from './validate';
 
@@ -78,7 +78,11 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
 
     case 'device_remove': {
       const deviceId = String(body.device_id ?? '');
-      return json(await api.deviceRemove(telegramId, deviceId));
+      const res = await api.deviceRemove(telegramId, deviceId);
+      // See handlers/devices.ts — device_id doubles as the device-auth
+      // device_token when the device was paired via the Android app.
+      if (res.success) await revokeDeviceToken(env, deviceId);
+      return json(res);
     }
 
     case 'notifications':

@@ -3,15 +3,15 @@
 Готовый smali-модуль (`smali/com/qmods/app/auth/`), который добавляет в
 Android-приложение вход через Telegram-бота и проверку подписки — без
 пароля/сессии на сайте внутри APK, только короткоживущий код привязки и
-затем свой собственный `device_token`.
+затем свой собственный `device_token`. Приложение **не пускает пользователя
+дальше**, пока привязка не подтверждена в Telegram и подписка не активна —
+проверка идёт заново при каждом холодном старте.
 
 Написан на **smali** (а не Kotlin/Java), потому что предполагается вклейка
 в уже собранный APK, для которого нет исходников — обычный сценарий,
 когда патчишь готовое приложение через `apktool`. Если у вас есть
-исходники/Gradle-проект, гораздо разумнее переписать это на Kotlin (в
-разделе «Логика» ниже — построчное описание, чтобы это было легко
-сделать) — smali здесь не даёт никаких преимуществ, кроме как раз
-совместимости с decompiled-проектом.
+исходники/Gradle-проект, гораздо разумнее переписать это на Kotlin — smali
+здесь не даёт никаких преимуществ, кроме совместимости с decompiled-проектом.
 
 ## Как это проверялось
 
@@ -19,37 +19,42 @@ Android-приложение вход через Telegram-бота и прове
 ассемблер (не просто "выглядит похоже на смали"):
 
 ```bash
-# те же координаты, что ниже в "Сборка в APK"
 java -cp 'smali-2.5.2.jar:dexlib2-2.5.2.jar:util-2.5.2.jar:antlr-3.5.2.jar:antlr-runtime-3.5.2.jar:jcommander-1.64.jar:stringtemplate-3.2.1.jar:guava-27.1-android.jar' \
   org.jf.smali.Main assemble -o /tmp/check.dex -a 30 smali
 ```
 
-Все 9 файлов собираются в валидный DEX без ошибок. Дополнительно результат
-разобран обратно через `baksmali` и построчно сверен с оригиналом — инструкции
-и операнды совпадают полностью (отличия только косметические: порядок
-методов/полей и автоматически сгенерированные имена меток). Это не
-гарантирует, что рантайм-логика на 100% ведёт себя как задумано (это можно
-подтвердить только реальным запуском на устройстве/эмуляторе), но снимает
-основной риск ручного smali — синтаксические ошибки и рассинхрон регистров
-(в частности, реальный баг был найден и исправлен именно так:
-`SubscriptionDispatcher`'s constructor берёт 6 параметров — 7 регистров
-вместе с самим инстансом, — что превышает лимит в 5 регистров для обычного
-`invoke-direct`; понадобился `invoke-direct/range` с непрерывным блоком
-регистров).
+Все файлы модуля собираются в валидный DEX без ошибок. Дополнительно
+результат разобран обратно через `baksmali` и построчно сверен с
+оригиналом — инструкции и операнды совпадают полностью (отличия только
+косметические: порядок методов/полей и автоматически сгенерированные имена
+меток). Это не гарантирует, что рантайм-логика на 100% ведёт себя как
+задумано (это можно подтвердить только реальным запуском на
+устройстве/эмуляторе), но снимает основной риск ручного smali —
+синтаксические ошибки и рассинхрон регистров. Так были реально пойманы и
+исправлены две ошибки до отправки:
+- `SubscriptionDispatcher`'s constructor берёт 6 параметров (7 регистров
+  вместе с самим инстансом) — превышает лимит в 5 для обычного
+  `invoke-direct`, понадобился `invoke-direct/range` с непрерывным блоком
+  регистров;
+- в `GateActivity.onCreate` случайно передавался инстанс `TextView` вместо
+  int-константы гравитации в `setGravity(I)V` (опечатка при переносе
+  черновика — `invoke-virtual {v1, v1}` вместо `{v1, v3}` с отдельной
+  `const/16 v3, 0x11`).
 
 ## Классы
 
 | Класс | Роль |
 |---|---|
-| `DevicePairing` | Публичная точка входа: `startPairing(Context, PairingCallback)` |
+| `DevicePairing` | Точка входа для привязки: `startPairing(Context, PairingCallback)` |
 | `DevicePairingRunnable` | Фоновый поток: запрашивает код, открывает Telegram, поллит статус |
 | `PairingCallback` | Интерфейс обратного вызова для привязки (`onCodeReady`/`onPaired`/`onFailed`) |
 | `CallbackDispatcher` | Доставляет вызовы `PairingCallback` в UI-поток через `Handler` |
-| `SubscriptionChecker` | Публичная точка входа: `isPaired`/`check`/`clearPairing` |
+| `SubscriptionChecker` | Точка входа для проверки: `isPaired`/`check`/`clearPairing` |
 | `SubscriptionCheckRunnable` | Фоновый поток: читает `device_token`, спрашивает Worker о подписке |
 | `SubscriptionCallback` | Интерфейс обратного вызова для проверки подписки |
 | `SubscriptionDispatcher` | Доставляет вызовы `SubscriptionCallback` в UI-поток |
 | `Http` | Общий блокирующий GET/POST на `HttpURLConnection`, без внешних зависимостей |
+| `GateActivity` | **Блокирующий экран** — показывается вместо контента приложения, пока не пройдена привязка и подписка не активна (см. ниже) |
 
 Ни один класс не тянет OkHttp/Retrofit/AndroidX — только `android.*`,
 `java.*` и `org.json.*` (входит в саму платформу Android), чтобы модуль
@@ -65,83 +70,84 @@ java -cp 'smali-2.5.2.jar:dexlib2-2.5.2.jar:util-2.5.2.jar:antlr-3.5.2.jar:antlr
    (`https://t.me/<bot>?start=devicelink_<CODE>`) через `Intent.ACTION_VIEW` —
    Telegram открывает чат с ботом.
 3. **Пользователь**: в чате с ботом (аккаунт уже привязан к qmods.ru через
-   обычный `/link`) — бот видит `devicelink_<CODE>`, проверяет привязку и
-   создаёт `device_token` (`worker/src/handlers/devicePair.ts`).
+   обычный `/link`) — бот видит `devicelink_<CODE>`, проверяет привязку,
+   создаёт `device_token` (`worker/src/handlers/devicePair.ts`) и
+   зеркалит его в качестве `device_id` на qmods.ru (`device_register` в
+   `mod/api/bot.php`) — поэтому приложение появляется в разделе
+   «📱 Устройства» бота/кабинета как обычное устройство, доступное для
+   отвязки.
 4. **Приложение**: поллит `GET /device/pair/status?code=<CODE>` каждые
    ~2.5 сек до `{status: "claimed", device_token: "..."}` — сохраняет токен
    в `SharedPreferences` и вызывает `callback.onPaired(token)`.
-5. **Дальше при каждой проверке подписки**: `SubscriptionChecker.check(...)`
+5. **Дальше при каждом холодном старте**: `SubscriptionChecker.check(...)`
    → `GET /device/subscription?token=<TOKEN>` → воркер резолвит токен в
    username (D1) и спрашивает `mod/api/bot.php` (`device_subscription`) →
    `{active, days_left, plan}`.
+6. **Отвязка**: если пользователь нажимает «🗑 Отвязать устройство» в боте
+   (или в Mini App) — `device_id` на qmods.ru очищается, и **тот же вызов**
+   удаляет соответствующую строку из D1 `device_tokens`
+   (`revokeDeviceToken()` в `worker/src/db.ts`). После этого
+   `device_token` в приложении становится недействителен — следующий
+   `check()` вернёт `onError("not_paired")`, и приложение снова уйдёт на
+   экран привязки.
 
 Приложение **никогда** не видит пароль/сессию qmods.ru, ни бот-токен
 Cloudflare Worker — только свой собственный `device_token`, который ничего
-не даёт без уже подтверждённой в Telegram привязки к конкретному аккаунту.
+не даёт без уже подтверждённой в Telegram привязки к конкретному аккаунту,
+и который можно отозвать в любой момент со стороны бота/кабинета.
 
-## Вызов из `onCreate` (реальный smali, не псевдокод)
+## Как работает гейт (не пускать без привязки и подписки)
 
-`smali-example/com/example/app/MainActivity.smali` — полный пример: класс
-реализует `PairingCallback` и `SubscriptionCallback` прямо на себе (проще
-всего вклеить в существующую Activity — не нужна отдельная анонимная
-реализация, которой в smali-то и нет), `onCreate` решает между
-`isPaired()`/`check()` и `startPairing()`, плюс все 5 callback-методов как
-рабочие заглушки на `Toast`. Собран и сверен тем же способом, что и сам
-модуль (см. «Как это проверялось»).
+`GateActivity` — самодостаточная Activity (интерфейс собирается программно,
+без XML-layout и ресурсов — минимальный `LinearLayout` + `TextView` +
+`Button`, чтобы вклеивалась в любой проект без завязки на чужие resource
+ID). Три режима, переданные через `Intent`-экстру `"mode"`:
 
-Суть `onCreate`:
+| mode | Когда | Что показывает |
+|---|---|---|
+| `"pair"` | `device_token` отсутствует/отозван | «Войти через Telegram» → `DevicePairing.startPairing()` |
+| `"paywall"` | Привязан, но подписка неактивна | «Проверить снова» → повторный `SubscriptionChecker.check()` |
+| `"error"` | Сама проверка не удалась (сеть/сервер) | То же, что paywall, но с другой подписью — **fail-closed**: не пускаем, если не смогли подтвердить подписку |
 
-```smali
-invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+Реальная Activity вашего приложения (`MainActivity` в примере ниже) на
+`onCreate` **сразу** вызывает `SubscriptionChecker.check()` — не
+`isPaired()` отдельно: если токена нет, `check()` сам вернёт
+`onError("not_paired")`, что эквивалентно «не привязан». Если подписка
+активна — `onResult(true, ...)` ничего не делает, и обычный контент
+приложения остаётся на экране. Если нет — `MainActivity` открывает
+`GateActivity` в нужном режиме и вызывает `finish()` на себе, чтобы кнопка
+«назад» не возвращала в заблокированный контент.
 
-# ... ваш setContentView(...) остаётся как есть ...
-
-invoke-static {p0}, Lcom/qmods/app/auth/SubscriptionChecker;->isPaired(Landroid/content/Context;)Z
-move-result v0
-if-eqz v0, :not_paired
-
-invoke-static {p0, p0}, Lcom/qmods/app/auth/SubscriptionChecker;->check(Landroid/content/Context;Lcom/qmods/app/auth/SubscriptionCallback;)V
-goto :done
-
-:not_paired
-invoke-static {p0, p0}, Lcom/qmods/app/auth/DevicePairing;->startPairing(Landroid/content/Context;Lcom/qmods/app/auth/PairingCallback;)V
-
-:done
-return-void
-```
-
-`p0` (сама Activity) передаётся как коллбэк в обоих вызовах — именно
-поэтому класс должен объявлять `.implements` на оба интерфейса (см.
-`.class`/`.super`/`.implements` в начале файла-примера). Если ваша Activity
-уже реализует другие интерфейсы — просто добавьте ещё две строки
-`.implements` рядом с уже существующими, конфликтов не будет.
+Пример полного `MainActivity.onCreate` + `onResult`/`onError` — в
+`smali-example/com/example/app/MainActivity.smali` (адаптируйте под ваш
+пакет/суперкласс, как описано ниже).
 
 ## Куда менять package name
 
 Два **независимых** переименования — не перепутайте:
 
 **1. Пакет самого модуля — `com.qmods.app.auth`.** Меняйте, только если
-хотите переложить модуль в другой пакет (например, чтобы не плодить лишний
-`com.qmods.*` рядом с вашим). Встречается в **10 файлах** — 9 в
-`smali/com/qmods/app/auth/` (сам модуль) плюс `smali-example/.../MainActivity.smali`
-(пример, 8 упоминаний: 2 `.implements` + 6 вызовов). Если оставляете как
-есть — этот пункт можно пропустить.
+хотите переложить модуль в другой пакет. Встречается во **всех файлах**
+модуля (`smali/com/qmods/app/auth/*.smali`) плюс в файле-примере
+(`.implements`/`const-class`/вызовы `DevicePairing`/`SubscriptionChecker`).
+Если оставляете как есть — этот пункт можно пропустить.
 ```bash
 grep -rl 'qmods/app/auth' smali smali-example      # проверить, где встречается
-# после переноса в новый путь:
 sed -i 's#Lcom/qmods/app/auth#Lyour/real/pkg/auth#g' path/to/renamed/*.smali
 ```
 Не забудьте физически переименовать и саму папку `com/qmods/app/auth` →
-`your/real/pkg/auth`, `.smali`-путь должен совпадать с именем класса внутри.
+`your/real/pkg/auth` — `.smali`-путь должен совпадать с именем класса внутри.
 
 **2. Пакет вашей Activity — `com.example.app` в файле-примере.** Это
 просто заглушка. `smali-example/com/example/app/MainActivity.smali` целиком
 не копируется в проект — у вас уже есть своя Activity в decompiled-дереве
-под своим пакетом; берётся только **тело** `onCreate` (кусок между
-`invoke-super` и `return-void`) и 5 callback-методов, и вставляется в ваш
-существующий класс. Строки `.implements Lcom/qmods/app/auth/PairingCallback;`
-и `.implements Lcom/qmods/app/auth/SubscriptionCallback;` добавляются в
-шапку вашего класса рядом с уже существующими `.implements`/`.super`.
+под своим пакетом; берётся только логика `onCreate`/`onResult`/`onError`/
+`openGate` и вставляется в ваш существующий класс. Строка `.implements
+Lcom/qmods/app/auth/SubscriptionCallback;` добавляется в шапку вашего
+класса рядом с уже существующими `.implements`/`.super`. Также в
+`GateActivity.smali`'s `onResult` замените `Lcom/instashopper/MainActivity;`
+на класс вашей реальной Activity (это то, куда гейт возвращает
+пользователя после успешной проверки).
 
 ## Сборка в APK
 
@@ -154,9 +160,17 @@ sed -i 's#Lcom/qmods/app/auth#Lyour/real/pkg/auth#g' path/to/renamed/*.smali
 3. В `DevicePairingRunnable.smali` и `SubscriptionCheckRunnable.smali`
    замените `https://update.qmurzik7.workers.dev` на реальный домен вашего
    воркера (см. `worker/wrangler.toml` → `PUBLIC_URL`), если он отличается.
-4. В вашей реальной Activity: добавьте два `.implements` и вставьте вызовы
-   из `onCreate` + 5 callback-методов — см. «Вызов из onCreate» выше.
-5. Соберите обратно: `apktool b app-decompiled -o app-patched.apk`, подпишите
+4. **Добавьте `GateActivity` в `AndroidManifest.xml`** (внутри `<application>`,
+   рядом с объявлением вашей основной Activity):
+   ```xml
+   <activity android:name="com.qmods.app.auth.GateActivity" android:exported="false" />
+   ```
+   (поправьте пакет на свой, если переименовывали модуль).
+5. В вашей реальной Activity: добавьте `.implements
+   Lcom/qmods/app/auth/SubscriptionCallback;` и вставьте логику из
+   `onCreate`/`onResult`/`onError`/`openGate` — см. «Как работает гейт»
+   выше и файл-пример.
+6. Соберите обратно: `apktool b app-decompiled -o app-patched.apk`, подпишите
    (`apksigner`/`jarsigner` + `zipalign`) своим ключом.
 
 ## Ограничения / что стоит знать
@@ -167,7 +181,10 @@ sed -i 's#Lcom/qmods/app/auth#Lyour/real/pkg/auth#g' path/to/renamed/*.smali
   (~5 минут) — после этого `onFailed("timeout")`, нужно заново
   `startPairing()`. Само окно привязки на сервере — 10 минут
   (`PAIRING_TTL_MS` в `worker/src/db.ts`).
-- `device_token` не имеет TTL и не отзывается автоматически — если нужен
-  logout/сброс привязки на конкретном устройстве, добавьте на сайте/боте
-  действие, которое удаляет строку из D1 `device_tokens` (сейчас это можно
-  сделать только вручную через `wrangler d1 execute`).
+- Подписка проверяется на **каждом холодном старте** (`onCreate`), не на
+  каждом `onResume` — переключение приложений туда-обратно не бьёт по
+  бэкенду лишними запросами. Если нужна проверка и на возврат из фона,
+  продублируйте вызов `SubscriptionChecker.check()` в `onResume()`.
+- `device_token` не имеет TTL, но **отзывается** при отвязке устройства
+  через раздел «Устройства» в боте или Mini App (см. «Протокол» выше) —
+  после этого приложение уходит на экран привязки при следующей проверке.

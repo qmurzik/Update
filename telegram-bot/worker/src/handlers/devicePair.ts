@@ -32,6 +32,12 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     return;
   }
 
+  // Mirrors the token into qmods.ru's own device_id field so the app shows
+  // up in the bot's/cabinet's "Устройства" section — best-effort: a failure
+  // here shouldn't break the pairing itself (the app is already usable via
+  // the device_token regardless of whether it's visible in that list).
+  await ctx.api.deviceRegister(ctx.telegramId, token).catch(() => undefined);
+
   await reply(
     ctx,
     `✅ Приложение привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда больше не нужно — приложение само определит, что привязка прошла.`,

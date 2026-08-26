@@ -138,3 +138,17 @@ export async function getUsernameByDeviceToken(env: Env, token: string): Promise
   await env.DB.prepare('UPDATE device_tokens SET last_seen = ? WHERE token = ?').bind(Date.now(), token).run();
   return row.username;
 }
+
+/**
+ * Revokes a device_token — called whenever a device is unlinked through the
+ * existing "Устройства" flow (chat bot or Mini App), since that device_id
+ * IS the token (see handlers/devicePair.ts). Without this, unlinking on
+ * qmods.ru wouldn't actually cut the app's access: `/device/subscription`
+ * only ever checks this table, not qmods.ru's own device_id field. No-op
+ * (not an error) if the id isn't a device_token at all — plain devices
+ * registered by other means never had a row here to begin with.
+ */
+export async function revokeDeviceToken(env: Env, deviceId: string): Promise<void> {
+  if (!deviceId) return;
+  await env.DB.prepare('DELETE FROM device_tokens WHERE token = ?').bind(deviceId).run();
+}
