@@ -701,6 +701,45 @@ if ($action === 'review_add') {
 // STATS — общая (нечувствительная) статистика для приветствия/раздела
 // ============================================================
 
+// ============================================================
+// DEVICE_SUBSCRIPTION — узкий срез подписки по username, только для
+// сервер-сервер вызова с Cloudflare Worker (device-auth хендшейм для
+// нативного Android-приложения через бота, см. worker/src/db.ts и
+// README «Авторизация приложения через бота»). Никогда не вызывается
+// напрямую из приложения — оно знает только device_token, который
+// проверяется на воркере, а сюда воркер обращается уже со своим
+// собственным бот-токеном. Отдаёт минимум полей (без id/платежей/
+// устройства) — приложению для гейта по подписке больше ничего не нужно.
+// ============================================================
+
+if ($action === 'device_subscription') {
+    $username = trim((string)($req['username'] ?? ''));
+    if ($username === '') {
+        bot_json(['success' => false, 'error' => 'Invalid username'], 400);
+    }
+
+    $user = null;
+    foreach (load_users() as $u) {
+        if (strtolower((string)($u['username'] ?? '')) === strtolower($username)) { $user = $u; break; }
+    }
+    if ($user === null) {
+        bot_json(['success' => true, 'found' => false, 'subscription' => null]);
+    }
+
+    $sub = subscription_info($user);
+    bot_json([
+        'success' => true,
+        'found' => true,
+        'subscription' => [
+            'plan' => $sub['plan'],
+            'active' => $sub['active'],
+            'days_left' => $sub['days_left'],
+            'expires_at' => $sub['expires_at'],
+            'expires_text' => $sub['expires_text'],
+        ],
+    ]);
+}
+
 if ($action === 'stats') {
     $stats = get_stats();
     bot_json([

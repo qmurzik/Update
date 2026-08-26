@@ -42,6 +42,9 @@ QMODS_SUBSCRIBE_URL = "https://qmods.ru/subscribe/"
 QMODS_SUPPORT_URL = "https://qmods.ru/mod/support.php"
 # Список Telegram ID администраторов через запятую.
 ADMIN_TELEGRAM_IDS = "5110155633"
+# @username бота (без @) — нужен, чтобы строить t.me-ссылки (deep link для
+# привязки приложения к аккаунту через бота, см. /device/pair/start).
+BOT_USERNAME = "qmods_bot"
 # Публичный origin этого же воркера (без пути в конце). Подставь свой, если
 # домен воркера отличается — иначе не покажется кнопка "Открыть в Mini App"
 # и не будут отправляться фото Киры (оба берут путь от этого URL).

@@ -147,6 +147,18 @@ export class QmodsUserApi {
   reviewAdd(telegramId: string, rating: number, text: string) {
     return callApi(this.url, this.token, 'review_add', { telegram_id: telegramId, rating, text }, 'POST');
   }
+
+  /**
+   * Narrow subscription-only lookup by username — backs `/device/subscription`
+   * for the native app's device-auth flow (see db.ts). Server-to-server only:
+   * the app never sees this call or this class's token, only the Worker does.
+   */
+  subscriptionByUsername(username: string) {
+    return callApi<{
+      found: boolean;
+      subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string } | null;
+    }>(this.url, this.token, 'device_subscription', { username });
+  }
 }
 
 export interface AdminUserCard {

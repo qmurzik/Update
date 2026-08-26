@@ -13,6 +13,8 @@ export interface Env {
   QMODS_SUBSCRIBE_URL: string;
   QMODS_SUPPORT_URL: string;
   ADMIN_TELEGRAM_IDS: string;
+  /** Bot's @username (no leading @), e.g. "qmods_bot" — used to build t.me deep links (device pairing, /start link_...). */
+  BOT_USERNAME: string;
   /**
    * This Worker's own public origin, e.g.
    * "https://qmods-telegram-bot.<account>.workers.dev" (no trailing slash,

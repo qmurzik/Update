@@ -5,6 +5,7 @@ import { clearState, getState, setState } from '../db';
 import { reportError } from '../errorReport';
 import type { TgUpdate } from '../telegram/types';
 import { handleInlineQuery } from './inline';
+import { handleDevicePairClaim } from './devicePair';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
 import { showProfile } from './profile';
@@ -141,6 +142,12 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
         if (deepLink) {
           await setState(env, chatId, 'link_code');
           return handleLinkCodeInput(ctx, deepLink[1]);
+        }
+        // Deep link opened by the Android app after POST /device/pair/start —
+        // t.me/<bot>?start=devicelink_<CODE>, see handlers/devicePair.ts.
+        const deviceLink = /^devicelink_([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/.exec(payload);
+        if (deviceLink) {
+          return handleDevicePairClaim(ctx, deviceLink[1]);
         }
         return handleStart(ctx);
       }

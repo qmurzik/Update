@@ -136,6 +136,16 @@ Telegram-сессию как cookie-сессию сайта).
 Публичная агрегированная статистика (без персональных данных) — для
 приветствия/раздела статистики бота.
 
+### `device_subscription`
+**Параметры:** `username`. Только для server-to-server вызова с Cloudflare
+Worker (device-auth хендшейк для нативного Android-приложения — см.
+`android-client/README.md` и README «Авторизация приложения через бота»).
+Отдаёт узкий срез `{found, subscription: {plan, active, days_left,
+expires_at, expires_text}}` — без id/платежей/устройства. Приложение
+никогда не вызывает это действие напрямую и не видит бот-токен, которым
+оно авторизовано — оно знает только `device_token`, который резолвится в
+`username` на самом воркере (`GET /device/subscription`).
+
 ---
 
 ## Админский API (`mod/admin/bot.php`)

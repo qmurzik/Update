@@ -3,12 +3,22 @@ import { adminIds } from './config';
 import { verifyWebhookSecret } from './security';
 import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
-import { QmodsAdminApi } from './qmodsApi';
+import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
+import { checkRateLimit, createDevicePairing, getDevicePairing, getUsernameByDeviceToken } from './db';
 import type { TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+}
+
+/** Best-effort caller identity for rate-limiting anonymous device-auth routes — Cloudflare always sets this. */
+function clientIp(request: Request): string {
+  return request.headers.get('cf-connecting-ip') ?? 'unknown';
+}
 
 // The bot's "/" command menu — see /setup-menu below. Kept short and curated
 // (full feature list stays discoverable via the Mini App menu button and
@@ -115,6 +125,56 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
       menuButtonMsg = 'menu button -> Mini App';
     }
     return new Response(`Commands set (default + ${ids.length} admin scope(s)); ${menuButtonMsg}.`, { status: 200 });
+  }
+
+  // ============================================================
+  // Device-auth handshake for the native Android app — see
+  // handlers/devicePair.ts and README "Авторизация приложения через бота".
+  // The app never holds a qmods.ru credential or this Worker's own PHP
+  // token; it only ever gets a device_token minted here, after the account
+  // owner confirms the pairing by opening a Telegram deep link into the bot.
+  // ============================================================
+
+  if (url.pathname === '/device/pair/start' && request.method === 'POST') {
+    const allowed = await checkRateLimit(env, `device-pair-start:${clientIp(request)}`, 10, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    const code = await createDevicePairing(env);
+    return jsonResponse({
+      success: true,
+      code,
+      deep_link: `https://t.me/${env.BOT_USERNAME}?start=devicelink_${code}`,
+      expires_in: 600,
+    });
+  }
+
+  if (url.pathname === '/device/pair/status' && request.method === 'GET') {
+    const code = (url.searchParams.get('code') ?? '').toUpperCase();
+    if (!code) return jsonResponse({ success: false, error: 'Missing code' }, 400);
+
+    const allowed = await checkRateLimit(env, `device-pair-status:${code}`, 150, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    const pairing = await getDevicePairing(env, code);
+    if (!pairing) return jsonResponse({ success: true, status: 'expired' });
+    if (pairing.status === 'pending') return jsonResponse({ success: true, status: 'pending' });
+    return jsonResponse({ success: true, status: 'claimed', device_token: pairing.device_token });
+  }
+
+  if (url.pathname === '/device/subscription' && request.method === 'GET') {
+    const token = url.searchParams.get('token') ?? '';
+    if (!token) return jsonResponse({ success: false, error: 'Missing token' }, 400);
+
+    const allowed = await checkRateLimit(env, `device-sub:${token}`, 30, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    const username = await getUsernameByDeviceToken(env, token);
+    if (!username) return jsonResponse({ success: false, error: 'Unknown or revoked device token' }, 401);
+
+    const api = new QmodsUserApi(env);
+    const res = await api.subscriptionByUsername(username);
+    if (!res.success) return jsonResponse({ success: false, error: 'Upstream error' }, 502);
+    return jsonResponse({ success: true, found: res.found, subscription: res.subscription });
   }
 
   if (url.pathname !== '/webhook' || request.method !== 'POST') {
