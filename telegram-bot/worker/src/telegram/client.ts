@@ -1,5 +1,5 @@
 import type { Env } from '../config';
-import type { InlineKeyboard } from './types';
+import type { BotCommandScope, InlineKeyboard, InlineQueryResultArticle } from './types';
 
 /**
  * Thin wrapper around the Telegram Bot API. No SDK dependency — Workers
@@ -74,8 +74,55 @@ export class TelegramClient {
     return this.call('setWebhook', {
       url,
       secret_token: secretToken,
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'inline_query'],
     });
+  }
+
+  /**
+   * Answers an inline query (`@qmods_bot ...` typed in any chat) — see
+   * handlers/inline.ts. Requires Inline Mode to be turned on for the bot via
+   * @BotFather (`/setinline`), a one-time manual step the Bot API has no
+   * endpoint for.
+   */
+  answerInlineQuery(inlineQueryId: string, results: InlineQueryResultArticle[], opts: { cacheTime?: number; isPersonal?: boolean } = {}) {
+    return this.call('answerInlineQuery', {
+      inline_query_id: inlineQueryId,
+      results,
+      cache_time: opts.cacheTime ?? 30,
+      is_personal: opts.isPersonal ?? true,
+    });
+  }
+
+  /**
+   * Registers the "/" command menu Telegram shows next to the message
+   * input. Scoped per-chat (BotCommandScopeChat) so admins can see a richer
+   * menu without cluttering it for everyone else — see /setup-menu in
+   * index.ts. A scoped call REPLACES that chat's list rather than merging
+   * with the default scope, so the admin list must repeat the default
+   * commands and add its own on top.
+   */
+  setMyCommands(commands: Array<{ command: string; description: string }>, scope: BotCommandScope) {
+    return this.call('setMyCommands', { commands, scope });
+  }
+
+  /**
+   * Persistent button next to the message compose bar that opens the Mini
+   * App directly — Telegram's flagship "this bot is really an app" entry
+   * point, distinct from the inline "Open Mini App" buttons already used
+   * elsewhere in the keyboards.
+   */
+  setChatMenuButton(webAppUrl: string, text = 'Открыть QMods') {
+    return this.call('setChatMenuButton', { menu_button: { type: 'web_app', text, web_app: { url: webAppUrl } } });
+  }
+
+  /**
+   * Reacts to a message with a single emoji. Best-effort by design — only a
+   * fixed Telegram-defined set of emoji is valid for reactions, so callers
+   * should treat this as decorative and swallow failures rather than let a
+   * rejected reaction break the surrounding flow.
+   */
+  setMessageReaction(chatId: number | string, messageId: number, emoji: string) {
+    return this.call('setMessageReaction', { chat_id: chatId, message_id: messageId, reaction: [{ type: 'emoji', emoji }] });
   }
 
   /**

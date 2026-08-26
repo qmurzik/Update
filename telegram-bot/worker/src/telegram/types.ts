@@ -28,10 +28,34 @@ export interface TgCallbackQuery {
   data?: string;
 }
 
+export interface TgInlineQuery {
+  id: string;
+  from: TgUser;
+  query: string;
+  offset: string;
+}
+
 export interface TgUpdate {
   update_id: number;
   message?: TgMessage;
   callback_query?: TgCallbackQuery;
+  inline_query?: TgInlineQuery;
+}
+
+/** Minimal subset of https://core.telegram.org/bots/api#inlinequeryresultarticle */
+export interface InlineQueryResultArticle {
+  type: 'article';
+  id: string;
+  title: string;
+  description?: string;
+  thumbnail_url?: string;
+  input_message_content: { message_text: string; parse_mode?: 'HTML' };
+}
+
+/** https://core.telegram.org/bots/api#botcommandscope — only the shapes this bot uses. */
+export interface BotCommandScope {
+  type: 'default' | 'chat';
+  chat_id?: number | string;
 }
 
 export interface InlineKeyboardButton {

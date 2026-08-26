@@ -134,6 +134,9 @@ export async function handleIssueInput(ctx: Ctx, username: string, daysText: str
     await reply(ctx, `❌ ${esc(String(res.error ?? 'Ошибка'))}`, cancelKeyboard('adm:card'));
     return;
   }
+  if (ctx.incomingMessageId) {
+    await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '👍').catch(() => undefined);
+  }
   await reply(ctx, `✅ ${esc(String(res.message ?? 'Готово'))}`, cancelKeyboard('adm:card'));
 }
 

@@ -1,92 +1,148 @@
 import type { Env } from './config';
+import { adminIds } from './config';
 import { verifyWebhookSecret } from './security';
 import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi } from './qmodsApi';
 import { esc, kiraImage } from './util';
+import { reportError } from './errorReport';
 import type { TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
+
+// The bot's "/" command menu — see /setup-menu below. Kept short and curated
+// (full feature list stays discoverable via the Mini App menu button and
+// the inline keyboards) rather than listing every callback-driven section.
+const DEFAULT_COMMANDS = [
+  { command: 'start', description: 'Открыть меню' },
+  { command: 'menu', description: 'Главное меню' },
+  { command: 'sub', description: 'Моя подписка' },
+  { command: 'devices', description: 'Мои устройства' },
+  { command: 'ach', description: 'Достижения и уровень' },
+  { command: 'pay', description: 'История платежей' },
+  { command: 'notif', description: 'Уведомления' },
+  { command: 'link', description: 'Привязать аккаунт QMods' },
+  { command: 'support', description: 'Поддержка' },
+];
+const ADMIN_COMMANDS = [...DEFAULT_COMMANDS, { command: 'admin', description: 'Админ-панель' }];
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // One-off convenience endpoint to (re)register the webhook with Telegram.
-    // Gated by the webhook secret itself, so it's only usable by whoever can
-    // already read the deployed secret (i.e. the operator running curl/browser
-    // right after `wrangler secret put`), never by a random visitor.
-    if (url.pathname === '/setup-webhook' && request.method === 'GET') {
-      if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
-        return new Response('Forbidden', { status: 403 });
-      }
-      const tg = new TelegramClient(env);
-      await tg.setWebhook(`${url.origin}/webhook`, env.TELEGRAM_WEBHOOK_SECRET);
-      return new Response('Webhook registered', { status: 200 });
-    }
-
-    // One-off: sets the bot's Telegram-side name/description to Kira's
-    // persona (setMyName/setMyDescription/setMyShortDescription — there is
-    // no Bot API method for the bot's own avatar, that's still @BotFather's
-    // /setuserpic). Same gating pattern as /setup-webhook.
-    if (url.pathname === '/setup-profile' && request.method === 'GET') {
-      if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
-        return new Response('Forbidden', { status: 403 });
-      }
-      const tg = new TelegramClient(env);
-      await tg.setPersona(
-        'Кира — QMods Bot',
-        'Привет! Я Кира 🖤 Помогу привязать аккаунт QMods, буду следить за подпиской, устройствами и уведомлениями — прямо здесь, в Telegram, без захода на сайт.\n\nНажмите Start, чтобы начать.',
-        'Кира — твой помощник QMods в Telegram: подписка, устройства, достижения 🖤'
-      );
-      return new Response('Profile updated. Аватар всё ещё нужно задать вручную через @BotFather -> /setuserpic.', { status: 200 });
-    }
-
-    // Mini App — static page + its one JSON API endpoint.
-    if (url.pathname === '/app' && request.method === 'GET') {
-      // about:blank when PUBLIC_URL isn't set yet — the onerror handlers on
-      // each <img> hide it cleanly rather than showing a broken-image icon.
-      const img = (name: string) => kiraImage(env, name) ?? 'about:blank';
-      const html = APP_HTML.replaceAll('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
-        .replaceAll('__KIRA_HERO__', img('kira-hero.webp'))
-        .replaceAll('__KIRA_LOADING__', img('kira-loading.webp'))
-        .replaceAll('__KIRA_EMPTY__', img('kira-empty.webp'));
-      return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-    }
-    if (url.pathname === '/app/api') {
-      return handleWebAppApi(request, env);
-    }
-
-    if (url.pathname !== '/webhook' || request.method !== 'POST') {
-      return new Response('Not found', { status: 404 });
-    }
-
-    if (!verifyWebhookSecret(request, env)) {
-      return new Response('Forbidden', { status: 403 });
-    }
-
-    let update: TgUpdate;
     try {
-      update = await request.json();
-    } catch {
-      return new Response('Bad request', { status: 400 });
+      return await route(request, env, ctx, url);
+    } catch (err) {
+      console.error('fetch handler failed', url.pathname, err);
+      ctx.waitUntil(reportError(env, err, `fetch ${request.method} ${url.pathname}`));
+      return new Response('Internal error', { status: 500 });
     }
-
-    // Ack Telegram immediately; do the actual work in the background so a
-    // slow downstream call to qmods.ru never causes Telegram to retry/duplicate.
-    ctx.waitUntil(
-      handleUpdate(update, env).catch((err) => {
-        console.error('handleUpdate failed', err);
-      })
-    );
-
-    return new Response('OK', { status: 200 });
   },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(deliverPendingNotifications(env));
+    ctx.waitUntil(
+      deliverPendingNotifications(env).catch((err) => {
+        console.error('scheduled delivery failed', err);
+        return reportError(env, err, 'scheduled: deliverPendingNotifications');
+      })
+    );
   },
 };
+
+async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL): Promise<Response> {
+  // One-off convenience endpoint to (re)register the webhook with Telegram.
+  // Gated by the webhook secret itself, so it's only usable by whoever can
+  // already read the deployed secret (i.e. the operator running curl/browser
+  // right after `wrangler secret put`), never by a random visitor.
+  if (url.pathname === '/setup-webhook' && request.method === 'GET') {
+    if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    const tg = new TelegramClient(env);
+    await tg.setWebhook(`${url.origin}/webhook`, env.TELEGRAM_WEBHOOK_SECRET);
+    return new Response('Webhook registered', { status: 200 });
+  }
+
+  // One-off: sets the bot's Telegram-side name/description to Kira's
+  // persona (setMyName/setMyDescription/setMyShortDescription — there is
+  // no Bot API method for the bot's own avatar, that's still @BotFather's
+  // /setuserpic). Same gating pattern as /setup-webhook.
+  if (url.pathname === '/setup-profile' && request.method === 'GET') {
+    if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    const tg = new TelegramClient(env);
+    await tg.setPersona(
+      'Кира — QMods Bot',
+      'Привет! Я Кира 🖤 Помогу привязать аккаунт QMods, буду следить за подпиской, устройствами и уведомлениями — прямо здесь, в Telegram, без захода на сайт.\n\nНажмите Start, чтобы начать.',
+      'Кира — твой помощник QMods в Telegram: подписка, устройства, достижения 🖤'
+    );
+    return new Response('Profile updated. Аватар всё ещё нужно задать вручную через @BotFather -> /setuserpic.', { status: 200 });
+  }
+
+  // Mini App — static page + its one JSON API endpoint.
+  if (url.pathname === '/app' && request.method === 'GET') {
+    // about:blank when PUBLIC_URL isn't set yet — the onerror handlers on
+    // each <img> hide it cleanly rather than showing a broken-image icon.
+    const img = (name: string) => kiraImage(env, name) ?? 'about:blank';
+    const html = APP_HTML.replaceAll('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
+      .replaceAll('__KIRA_HERO__', img('kira-hero.webp'))
+      .replaceAll('__KIRA_LOADING__', img('kira-loading.webp'))
+      .replaceAll('__KIRA_EMPTY__', img('kira-empty.webp'));
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+  if (url.pathname === '/app/api') {
+    return handleWebAppApi(request, env);
+  }
+
+  // One-off: registers the "/" command menu (default + a richer one for
+  // each admin's private chat via BotCommandScopeChat) and the persistent
+  // chat menu button that opens the Mini App directly from the message
+  // compose bar. Same gating pattern as /setup-webhook.
+  if (url.pathname === '/setup-menu' && request.method === 'GET') {
+    if (url.searchParams.get('token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    const tg = new TelegramClient(env);
+    await tg.setMyCommands(DEFAULT_COMMANDS, { type: 'default' });
+    const ids = adminIds(env);
+    for (const id of ids) {
+      await tg.setMyCommands(ADMIN_COMMANDS, { type: 'chat', chat_id: id });
+    }
+    let menuButtonMsg = 'menu button skipped (PUBLIC_URL not set)';
+    if (env.PUBLIC_URL) {
+      await tg.setChatMenuButton(`${env.PUBLIC_URL}/app`);
+      menuButtonMsg = 'menu button -> Mini App';
+    }
+    return new Response(`Commands set (default + ${ids.length} admin scope(s)); ${menuButtonMsg}.`, { status: 200 });
+  }
+
+  if (url.pathname !== '/webhook' || request.method !== 'POST') {
+    return new Response('Not found', { status: 404 });
+  }
+
+  if (!verifyWebhookSecret(request, env)) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  let update: TgUpdate;
+  try {
+    update = await request.json();
+  } catch {
+    return new Response('Bad request', { status: 400 });
+  }
+
+  // Ack Telegram immediately; do the actual work in the background so a
+  // slow downstream call to qmods.ru never causes Telegram to retry/duplicate.
+  ctx.waitUntil(
+    handleUpdate(update, env).catch((err) => {
+      console.error('handleUpdate failed', err);
+      return reportError(env, err, 'handleUpdate');
+    })
+  );
+
+  return new Response('OK', { status: 200 });
+}
 
 /**
  * Runs on the Cron Trigger (see wrangler.toml). Pulls notifications created

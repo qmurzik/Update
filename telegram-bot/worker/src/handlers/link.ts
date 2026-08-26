@@ -40,6 +40,9 @@ export async function handleLinkCodeInput(ctx: Ctx, text: string): Promise<void>
 
   if (result.success && result.linked) {
     await clearState(ctx.env, ctx.chatId);
+    if (ctx.incomingMessageId) {
+      await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '🎉').catch(() => undefined);
+    }
     await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? ''))}</b> успешно привязан!`);
     return;
   }

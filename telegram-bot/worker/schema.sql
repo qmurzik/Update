@@ -36,3 +36,16 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created_at ON admin_audit_log (created_at);
+
+-- Dedupe/cooldown ledger for admin error alerts (see src/errorReport.ts).
+-- One row per distinct error signature (where it happened + error name/
+-- message + top stack frame, hashed) so a hot failure loop sends one
+-- Telegram alert per cooldown window instead of flooding admins, while
+-- still counting how many times it has actually fired.
+CREATE TABLE IF NOT EXISTS error_alerts (
+    signature      TEXT PRIMARY KEY,
+    first_seen_at  INTEGER NOT NULL,
+    last_seen_at   INTEGER NOT NULL,
+    last_sent_at   INTEGER NOT NULL,
+    count          INTEGER NOT NULL DEFAULT 1
+);

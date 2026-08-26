@@ -2,6 +2,7 @@ import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
 import { checkRateLimit } from '../db';
+import { reportError } from '../errorReport';
 import { extractInitData, validateInitData } from './validate';
 
 const LINK_RATE_MAX = 6;
@@ -42,6 +43,17 @@ export async function handleWebAppApi(request: Request, env: Env): Promise<Respo
     // action-less requests (unlikely) fall through with an empty body
   }
   const action = String(body.action ?? '');
+
+  try {
+    return await dispatchAction(action, body, telegramId, env);
+  } catch (err) {
+    console.error('webapp api action failed', action, err);
+    await reportError(env, err, `webapp/api action=${action}`);
+    return json({ success: false, error: 'Внутренняя ошибка сервера' }, 500);
+  }
+}
+
+async function dispatchAction(action: string, body: Record<string, unknown>, telegramId: string, env: Env): Promise<Response> {
   const api = new QmodsUserApi(env);
   const userIsAdmin = isAdmin(env, telegramId);
 

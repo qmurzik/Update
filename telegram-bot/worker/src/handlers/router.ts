@@ -2,7 +2,9 @@ import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { buildCtx } from './context';
 import { clearState, getState, setState } from '../db';
+import { reportError } from '../errorReport';
 import type { TgUpdate } from '../telegram/types';
+import { handleInlineQuery } from './inline';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
 import { showProfile } from './profile';
@@ -97,6 +99,13 @@ export async function handleUpdate(update: TgUpdate, env: Env): Promise<void> {
     await handleCallback(update, env);
     return;
   }
+  if (update.inline_query) {
+    await handleInlineQuery(update.inline_query, env).catch((err) => {
+      console.error('inline query failed', err);
+      return reportError(env, err, 'inline_query');
+    });
+    return;
+  }
   if (update.message?.text) {
     await handleMessage(update, env);
   }
@@ -107,8 +116,18 @@ async function handleMessage(update: TgUpdate, env: Env): Promise<void> {
   const chatId = msg.chat.id;
   const telegramId = String(msg.from?.id ?? chatId);
   const text = (msg.text ?? '').trim();
-  const ctx = buildCtx(env, chatId, telegramId);
+  const ctx = buildCtx(env, chatId, telegramId, { incomingMessageId: msg.message_id });
 
+  try {
+    await dispatchMessage(ctx, env, chatId, telegramId, text);
+  } catch (err) {
+    console.error('message handler failed', text, err);
+    await reportError(env, err, `message "${text.slice(0, 40)}"`);
+    await reply(ctx, '⚠️ Что-то пошло не так на нашей стороне. Мы уже в курсе — попробуйте ещё раз через минуту.').catch(() => undefined);
+  }
+}
+
+async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatId: number, telegramId: string, text: string): Promise<void> {
   if (text.startsWith('/')) {
     const parts = text.split(/\s+/);
     const command = parts[0].split('@')[0];
@@ -127,6 +146,18 @@ async function handleMessage(update: TgUpdate, env: Env): Promise<void> {
       }
       case '/menu':
         return handleStart(ctx);
+      case '/sub':
+        return showSubscription(ctx);
+      case '/devices':
+        return showDevices(ctx);
+      case '/ach':
+        return showAchievements(ctx);
+      case '/pay':
+        return showPayments(ctx);
+      case '/notif':
+        return showNotifications(ctx);
+      case '/support':
+        return showSupport(ctx);
       case '/link':
         return startLink(ctx);
       case '/unlink':
@@ -192,6 +223,7 @@ async function handleCallback(update: TgUpdate, env: Env): Promise<void> {
     await ctx.tg.answerCallbackQuery(cq.id);
   } catch (err) {
     console.error('callback handler failed', data, err);
+    await reportError(env, err, `callback ${data}`);
     await ctx.tg.answerCallbackQuery(cq.id, 'Произошла ошибка, попробуйте ещё раз', true);
   }
 }
