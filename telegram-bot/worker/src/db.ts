@@ -92,13 +92,14 @@ export async function createDevicePairing(env: Env): Promise<string> {
 }
 
 export interface DevicePairingRow {
-  status: 'pending' | 'claimed';
+  status: 'pending' | 'claimed' | 'rejected';
   device_token: string | null;
+  reason: string | null;
   created_at: number;
 }
 
 export async function getDevicePairing(env: Env, code: string): Promise<DevicePairingRow | null> {
-  const row = await env.DB.prepare('SELECT status, device_token, created_at FROM device_pairings WHERE code = ?')
+  const row = await env.DB.prepare('SELECT status, device_token, reason, created_at FROM device_pairings WHERE code = ?')
     .bind(code)
     .first<DevicePairingRow>();
   if (!row) return null;
@@ -106,28 +107,52 @@ export async function getDevicePairing(env: Env, code: string): Promise<DevicePa
   return row;
 }
 
+/** ONE_DEVICE_PER_ACCOUNT: true if `username` already has a live device_token. */
+export async function hasActiveDeviceToken(env: Env, username: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 FROM device_tokens WHERE username = ? LIMIT 1').bind(username).first();
+  return row !== null;
+}
+
+export type ClaimResult = { ok: true; token: string } | { ok: false; reason: 'invalid' | 'device_limit' };
+
 /**
  * Called from the bot's `/start devicelink_<CODE>` handler once the
  * chat's Telegram account is confirmed linked to `username`. Mints a new
- * long-lived device_token and marks the pairing claimed. Returns null for
- * an unknown/expired/already-claimed code — best-effort double-claim
- * protection via the WHERE clause (same accepted race-window tradeoff as
- * checkRateLimit above; a real collision would need two claims landing
- * within milliseconds of each other on the same freshly-generated code).
+ * long-lived device_token and marks the pairing claimed.
+ *
+ * ONE_DEVICE_PER_ACCOUNT: an account may only have one live device_token at
+ * a time — a second pairing attempt is rejected (not silently replaced),
+ * so the app must be unlinked via "Устройства" before a new one can pair.
+ * The pairing row is marked 'rejected' (with a reason) rather than left
+ * 'pending' so the app's poll sees this immediately instead of just timing
+ * out after 5 minutes.
+ *
+ * Returns `{ ok: false, reason: 'invalid' }` for an unknown/expired/
+ * already-claimed code — best-effort double-claim protection via the WHERE
+ * clause (same accepted race-window tradeoff as checkRateLimit above; a
+ * real collision would need two claims landing within milliseconds of each
+ * other on the same freshly-generated code).
  */
-export async function claimDevicePairing(env: Env, code: string, username: string): Promise<string | null> {
+export async function claimDevicePairing(env: Env, code: string, username: string): Promise<ClaimResult> {
   const row = await getDevicePairing(env, code);
-  if (!row || row.status !== 'pending') return null;
+  if (!row || row.status !== 'pending') return { ok: false, reason: 'invalid' };
+
+  if (await hasActiveDeviceToken(env, username)) {
+    await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'device_limit' WHERE code = ? AND status = 'pending'")
+      .bind(code)
+      .run();
+    return { ok: false, reason: 'device_limit' };
+  }
 
   const token = randomHex(24);
   const now = Date.now();
   const update = await env.DB.prepare("UPDATE device_pairings SET status = 'claimed', device_token = ?, claimed_at = ? WHERE code = ? AND status = 'pending'")
     .bind(token, now, code)
     .run();
-  if (!update.meta.changes) return null;
+  if (!update.meta.changes) return { ok: false, reason: 'invalid' };
 
   await env.DB.prepare('INSERT INTO device_tokens (token, username, created_at, last_seen) VALUES (?, ?, ?, ?)').bind(token, username, now, now).run();
-  return token;
+  return { ok: true, token };
 }
 
 /** Resolves a device_token to its qmods.ru username, or null if unknown. Touches last_seen for observability. */

@@ -845,12 +845,51 @@
 .end method
 
 .method public onFailed(Ljava/lang/String;)V
-    .locals 1
+    .locals 4
     .param p1, "reason"    # Ljava/lang/String;
 
-    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->codeView:Landroid/widget/TextView;
+    const-string v0, "device_limit"
 
-    invoke-virtual {v0, p1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :check_timeout
+
+    const-string v1, "У вас уже привязано одно устройство. Отвяжите его в разделе «Устройства» бота, затем попробуйте снова."
+
+    goto :show
+
+    :check_timeout
+    const-string v0, "timeout"
+
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :other_reason
+
+    const-string v1, "Время ожидания истекло. Попробуйте снова."
+
+    goto :show
+
+    :other_reason
+    const-string v1, "Не удалось выполнить привязку. Проверьте интернет и попробуйте снова."
+
+    :show
+    iget-object v2, p0, Lcom/qmods/app/auth/GateActivity;->messageView:Landroid/widget/TextView;
+
+    invoke-virtual {v2, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    iget-object v2, p0, Lcom/qmods/app/auth/GateActivity;->codeView:Landroid/widget/TextView;
+
+    const-string v3, ""
+
+    invoke-virtual {v2, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    const/16 v3, 0x8    # View.GONE
+
+    invoke-virtual {v2, v3}, Landroid/view/View;->setVisibility(I)V
 
     return-void
 .end method

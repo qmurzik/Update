@@ -61,10 +61,15 @@ CREATE TABLE IF NOT EXISTS error_alerts (
 -- opens `t.me/<bot>?start=devicelink_<code>`. Codes are meant to expire
 -- (10 minutes, enforced in code, not here) — stale rows are harmless
 -- since a 'pending' row that outlives its TTL is simply never claimable.
+-- `reason` is only set when status = 'rejected' (currently just
+-- 'device_limit' — the account already has an active device_token, see
+-- ONE_DEVICE_PER_ACCOUNT below). Existing databases need:
+--   ALTER TABLE device_pairings ADD COLUMN reason TEXT;
 CREATE TABLE IF NOT EXISTS device_pairings (
     code          TEXT PRIMARY KEY,
-    status        TEXT NOT NULL DEFAULT 'pending', -- pending | claimed
+    status        TEXT NOT NULL DEFAULT 'pending', -- pending | claimed | rejected
     device_token  TEXT,
+    reason        TEXT,
     created_at    INTEGER NOT NULL,
     claimed_at    INTEGER
 );

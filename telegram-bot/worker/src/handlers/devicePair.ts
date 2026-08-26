@@ -22,8 +22,16 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     return;
   }
 
-  const token = await claimDevicePairing(ctx.env, code, me.user.username);
-  if (!token) {
+  const result = await claimDevicePairing(ctx.env, code, me.user.username);
+  if (!result.ok) {
+    if (result.reason === 'device_limit') {
+      await reply(
+        ctx,
+        '❌ К этому аккаунту уже привязано одно устройство. Сначала отвяжите его в разделе «⚙️ Устройства», затем откройте ссылку из нового приложения ещё раз.',
+        mainMenu(ctx.env, true, false)
+      );
+      return;
+    }
     await reply(
       ctx,
       '❌ Код устарел или уже был использован. Вернитесь в приложение и запросите новую привязку.',
@@ -31,6 +39,7 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     );
     return;
   }
+  const token = result.token;
 
   // Mirrors the token into qmods.ru's own device_id field so the app shows
   // up in the bot's/cabinet's "Устройства" section — best-effort: a failure

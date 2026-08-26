@@ -179,6 +179,29 @@
     return-void
 
     :check_expired
+    const-string v5, "rejected"
+
+    invoke-virtual {v5, v11}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v6
+
+    if-eqz v6, :check_timeout
+
+    # ONE_DEVICE_PER_ACCOUNT: server refused the claim (most likely the
+    # account already has another device paired) — done polling either way.
+    const-string v5, "reason"
+
+    const-string v6, "device_limit"
+
+    invoke-virtual {v4, v5, v6}, Lorg/json/JSONObject;->optString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v5
+
+    invoke-direct {p0, v5}, Lcom/qmods/app/auth/DevicePairingRunnable;->postFailed(Ljava/lang/String;)V
+
+    return-void
+
+    :check_timeout
     const-string v5, "expired"
 
     invoke-virtual {v5, v11}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z

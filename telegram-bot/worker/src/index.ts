@@ -158,6 +158,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const pairing = await getDevicePairing(env, code);
     if (!pairing) return jsonResponse({ success: true, status: 'expired' });
     if (pairing.status === 'pending') return jsonResponse({ success: true, status: 'pending' });
+    if (pairing.status === 'rejected') return jsonResponse({ success: true, status: 'rejected', reason: pairing.reason ?? 'rejected' });
     return jsonResponse({ success: true, status: 'claimed', device_token: pairing.device_token });
   }
 
