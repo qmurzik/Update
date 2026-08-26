@@ -39,14 +39,23 @@
 # 1. POST /device/pair/start -> {code, deep_link}
 # 2. hand code+deepLink to the callback, open Telegram on the deep link
 # 3. poll GET /device/pair/status?code=... every ~2.5s for up to ~5 minutes
-# 4. on "claimed": save device_token, call onPaired(); on "expired"/timeout/
-#    any exception: call onFailed() with a short reason code.
+# 4. on "claimed": save device_token, call onPaired(); on "expired"/timeout:
+#    call onFailed() with a short reason code.
+#
+# Each poll attempt has its own try/catch: a single transient exception
+# (typically the network flapping right as the user switches back from
+# Telegram to this app) no longer aborts the whole flow — it's logged and
+# the loop just tries again next tick. Only 5 CONSECUTIVE failed attempts
+# in a row give up with "network_error"; any successful attempt (even one
+# that just reports "pending") resets the consecutive-failure count. An
+# exception during the one-shot /pair/start call still fails immediately —
+# there's no loop to retry within yet.
 #
 # NOTE: this method's URL literals must match wherever you deployed the
 # Cloudflare Worker (see telegram-bot/worker/wrangler.toml PUBLIC_URL) —
 # update both occurrences below if it differs from the QMods default.
 .method public run()V
-    .locals 12
+    .locals 13
 
     :try_start
     const-string v1, "https://update.qmurzik7.workers.dev/device/pair/start"
@@ -91,8 +100,12 @@
     invoke-direct {p0, v8, v9}, Lcom/qmods/app/auth/DevicePairingRunnable;->postCodeReady(Ljava/lang/String;Ljava/lang/String;)V
 
     invoke-direct {p0, v9}, Lcom/qmods/app/auth/DevicePairingRunnable;->openTelegram(Ljava/lang/String;)V
+    :try_end
+    .catch Ljava/lang/Exception; {:try_start .. :try_end} :catch_start_failed
 
     const/4 v10, 0x0
+
+    const/4 v12, 0x0
 
     :poll_loop
     const/16 v1, 0x78
@@ -110,6 +123,7 @@
 
     invoke-static {v0, v1}, Ljava/lang/Thread;->sleep(J)V
 
+    :poll_try_start
     new-instance v1, Ljava/lang/StringBuilder;
 
     invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V
@@ -180,19 +194,47 @@
     return-void
 
     :next_attempt
+    const/4 v12, 0x0
+
     add-int/lit8 v10, v10, 0x1
 
     goto :poll_loop
 
-    :try_end
-    .catch Ljava/lang/Exception; {:try_start .. :try_end} :catch_all
+    :poll_try_end
+    .catch Ljava/lang/Exception; {:poll_try_start .. :poll_try_end} :poll_catch
 
-    :catch_all
+    :poll_catch
     move-exception v0
 
     const-string v2, "QModsAuth"
 
-    const-string v3, "device pairing failed"
+    const-string v3, "device pairing poll attempt failed, retrying"
+
+    invoke-static {v2, v3, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+
+    add-int/lit8 v12, v12, 0x1
+
+    const/4 v1, 0x5
+
+    if-lt v12, v1, :retry_next
+
+    const-string v3, "network_error"
+
+    invoke-direct {p0, v3}, Lcom/qmods/app/auth/DevicePairingRunnable;->postFailed(Ljava/lang/String;)V
+
+    return-void
+
+    :retry_next
+    add-int/lit8 v10, v10, 0x1
+
+    goto :poll_loop
+
+    :catch_start_failed
+    move-exception v0
+
+    const-string v2, "QModsAuth"
+
+    const-string v3, "device pairing start failed"
 
     invoke-static {v2, v3, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
 
