@@ -79,6 +79,70 @@ java -cp 'smali-2.5.2.jar:dexlib2-2.5.2.jar:util-2.5.2.jar:antlr-3.5.2.jar:antlr
 Cloudflare Worker — только свой собственный `device_token`, который ничего
 не даёт без уже подтверждённой в Telegram привязки к конкретному аккаунту.
 
+## Вызов из `onCreate` (реальный smali, не псевдокод)
+
+`smali-example/com/example/app/MainActivity.smali` — полный пример: класс
+реализует `PairingCallback` и `SubscriptionCallback` прямо на себе (проще
+всего вклеить в существующую Activity — не нужна отдельная анонимная
+реализация, которой в smali-то и нет), `onCreate` решает между
+`isPaired()`/`check()` и `startPairing()`, плюс все 5 callback-методов как
+рабочие заглушки на `Toast`. Собран и сверен тем же способом, что и сам
+модуль (см. «Как это проверялось»).
+
+Суть `onCreate`:
+
+```smali
+invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+
+# ... ваш setContentView(...) остаётся как есть ...
+
+invoke-static {p0}, Lcom/qmods/app/auth/SubscriptionChecker;->isPaired(Landroid/content/Context;)Z
+move-result v0
+if-eqz v0, :not_paired
+
+invoke-static {p0, p0}, Lcom/qmods/app/auth/SubscriptionChecker;->check(Landroid/content/Context;Lcom/qmods/app/auth/SubscriptionCallback;)V
+goto :done
+
+:not_paired
+invoke-static {p0, p0}, Lcom/qmods/app/auth/DevicePairing;->startPairing(Landroid/content/Context;Lcom/qmods/app/auth/PairingCallback;)V
+
+:done
+return-void
+```
+
+`p0` (сама Activity) передаётся как коллбэк в обоих вызовах — именно
+поэтому класс должен объявлять `.implements` на оба интерфейса (см.
+`.class`/`.super`/`.implements` в начале файла-примера). Если ваша Activity
+уже реализует другие интерфейсы — просто добавьте ещё две строки
+`.implements` рядом с уже существующими, конфликтов не будет.
+
+## Куда менять package name
+
+Два **независимых** переименования — не перепутайте:
+
+**1. Пакет самого модуля — `com.qmods.app.auth`.** Меняйте, только если
+хотите переложить модуль в другой пакет (например, чтобы не плодить лишний
+`com.qmods.*` рядом с вашим). Встречается в **10 файлах** — 9 в
+`smali/com/qmods/app/auth/` (сам модуль) плюс `smali-example/.../MainActivity.smali`
+(пример, 8 упоминаний: 2 `.implements` + 6 вызовов). Если оставляете как
+есть — этот пункт можно пропустить.
+```bash
+grep -rl 'qmods/app/auth' smali smali-example      # проверить, где встречается
+# после переноса в новый путь:
+sed -i 's#Lcom/qmods/app/auth#Lyour/real/pkg/auth#g' path/to/renamed/*.smali
+```
+Не забудьте физически переименовать и саму папку `com/qmods/app/auth` →
+`your/real/pkg/auth`, `.smali`-путь должен совпадать с именем класса внутри.
+
+**2. Пакет вашей Activity — `com.example.app` в файле-примере.** Это
+просто заглушка. `smali-example/com/example/app/MainActivity.smali` целиком
+не копируется в проект — у вас уже есть своя Activity в decompiled-дереве
+под своим пакетом; берётся только **тело** `onCreate` (кусок между
+`invoke-super` и `return-void`) и 5 callback-методов, и вставляется в ваш
+существующий класс. Строки `.implements Lcom/qmods/app/auth/PairingCallback;`
+и `.implements Lcom/qmods/app/auth/SubscriptionCallback;` добавляются в
+шапку вашего класса рядом с уже существующими `.implements`/`.super`.
+
 ## Сборка в APK
 
 1. Скачайте [apktool](https://apktool.org/) и декомпилируйте ваш APK:
@@ -86,32 +150,12 @@ Cloudflare Worker — только свой собственный `device_token
 2. Скопируйте `smali/com/qmods/app/auth/` в
    `app-decompiled/smali/com/qmods/app/auth/` (при нескольких smali-папках —
    `smali_classes2` и т.д. — в любую, главное не продублировать пакет).
-   **Если у вашего приложения другой package name** — переименуйте папку
-   `com/qmods` и замените `Lcom/qmods/app/auth/` на ваш пакет во всех
-   9 файлах (простой `sed -i 's#Lcom/qmods/app/auth#Lyour/pkg/auth#g' smali/**/*.smali` после переноса).
+   Если переименовываете пакет модуля — см. «Куда менять package name» выше.
 3. В `DevicePairingRunnable.smali` и `SubscriptionCheckRunnable.smali`
    замените `https://update.qmurzik7.workers.dev` на реальный домен вашего
    воркера (см. `worker/wrangler.toml` → `PUBLIC_URL`), если он отличается.
-4. Из своей Activity вызовите (пример на Java/Kotlin-псевдокоде — реальный
-   вызов идёт напрямую в декомпилированный smali вашей Activity тем же
-   `invoke-static`, если и она у вас в smali):
-   ```java
-   DevicePairing.startPairing(this, new PairingCallback() {
-       public void onCodeReady(String code, String deepLink) { /* показать код как текст, на случай если Telegram не установлен */ }
-       public void onPaired(String deviceToken) { /* открыт доступ, обновить экран */ }
-       public void onFailed(String reason) { /* показать ошибку, дать повторить */ }
-   });
-
-   // при каждом запуске/возврате в приложение:
-   if (SubscriptionChecker.isPaired(this)) {
-       SubscriptionChecker.check(this, new SubscriptionCallback() {
-           public void onResult(boolean active, int daysLeft, String plan) { /* active == false -> paywall */ }
-           public void onError(String reason) { /* "not_paired" -> заново на startPairing() */ }
-       });
-   } else {
-       // показать экран "Войти через Telegram" с кнопкой на startPairing()
-   }
-   ```
+4. В вашей реальной Activity: добавьте два `.implements` и вставьте вызовы
+   из `onCreate` + 5 callback-методов — см. «Вызов из onCreate» выше.
 5. Соберите обратно: `apktool b app-decompiled -o app-patched.apk`, подпишите
    (`apksigner`/`jarsigner` + `zipalign`) своим ключом.
 
