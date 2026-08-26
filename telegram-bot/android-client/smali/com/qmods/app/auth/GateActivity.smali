@@ -27,6 +27,14 @@
 
 .field private actionButton:Landroid/widget/Button;
 
+.field private badge:Landroid/widget/FrameLayout;
+
+.field private pulseX:Landroid/animation/ObjectAnimator;
+
+.field private pulseY:Landroid/animation/ObjectAnimator;
+
+.field private pulseAlpha:Landroid/animation/ObjectAnimator;
+
 .method public constructor <init>()V
     .locals 0
 
@@ -83,49 +91,144 @@
 
     invoke-virtual {v0, v1}, Landroid/view/View;->setBackgroundColor(I)V
 
-    # --- brand title ---
+    # --- circular gradient badge with a "sent" glyph (brand mark) ---
+    new-instance v1, Landroid/widget/FrameLayout;
+
+    invoke-direct {v1, p0}, Landroid/widget/FrameLayout;-><init>(Landroid/content/Context;)V
+
+    iput-object v1, p0, Lcom/qmods/app/auth/GateActivity;->badge:Landroid/widget/FrameLayout;
+
+    const/4 v4, 0x2
+
+    new-array v3, v4, [I
+
+    const v5, 0xff35a7ff
+
+    const/4 v6, 0x0
+
+    aput v5, v3, v6
+
+    const v5, 0xff7c3aed
+
+    const/4 v6, 0x1
+
+    aput v5, v3, v6
+
+    sget-object v5, Landroid/graphics/drawable/GradientDrawable$Orientation;->TL_BR:Landroid/graphics/drawable/GradientDrawable$Orientation;
+
+    new-instance v6, Landroid/graphics/drawable/GradientDrawable;
+
+    invoke-direct {v6, v5, v3}, Landroid/graphics/drawable/GradientDrawable;-><init>(Landroid/graphics/drawable/GradientDrawable$Orientation;[I)V
+
+    const/4 v3, 0x1    # GradientDrawable.OVAL
+
+    invoke-virtual {v6, v3}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
+
+    invoke-virtual {v1, v6}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+
     new-instance v3, Landroid/widget/TextView;
 
     invoke-direct {v3, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
 
-    const-string v4, "QMods"
+    const-string v5, "➤"
 
-    invoke-virtual {v3, v4}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
 
-    const/high16 v4, 0x41c00000    # 24.0sp
+    const v5, 0xffffffff
 
-    invoke-virtual {v3, v4}, Landroid/widget/TextView;->setTextSize(F)V
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextColor(I)V
 
-    sget-object v4, Landroid/graphics/Typeface;->DEFAULT_BOLD:Landroid/graphics/Typeface;
+    const/high16 v5, 0x41c00000    # 24.0sp
 
-    invoke-virtual {v3, v4}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;)V
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextSize(F)V
 
-    const v4, 0xffffffff
+    sget-object v5, Landroid/graphics/Typeface;->DEFAULT_BOLD:Landroid/graphics/Typeface;
 
-    invoke-virtual {v3, v4}, Landroid/widget/TextView;->setTextColor(I)V
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;)V
 
-    const/16 v4, 0x11
+    const/high16 v5, -0x3dc00000    # -45.0f
 
-    invoke-virtual {v3, v4}, Landroid/widget/TextView;->setGravity(I)V
+    invoke-virtual {v3, v5}, Landroid/view/View;->setRotation(F)V
+
+    new-instance v5, Landroid/widget/FrameLayout$LayoutParams;
+
+    const/4 v7, -0x2    # WRAP_CONTENT
+
+    const/16 v8, 0x11    # Gravity.CENTER
+
+    invoke-direct {v5, v7, v7, v8}, Landroid/widget/FrameLayout$LayoutParams;-><init>(III)V
+
+    invoke-virtual {v1, v3, v5}, Landroid/widget/FrameLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+    const/high16 v7, 0x42980000    # 76.0dp
+
+    invoke-direct {p0, v7}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v7
+
+    new-instance v5, Landroid/widget/LinearLayout$LayoutParams;
+
+    invoke-direct {v5, v7, v7}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V
+
+    const/high16 v8, 0x41800000    # 16.0dp bottom margin
+
+    invoke-direct {p0, v8}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v8
+
+    const/4 v9, 0x0
+
+    invoke-virtual {v5, v9, v9, v9, v8}, Landroid/view/ViewGroup$MarginLayoutParams;->setMargins(IIII)V
+
+    invoke-virtual {v0, v1, v5}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+    # --- eyebrow brand label ---
+    new-instance v3, Landroid/widget/TextView;
+
+    invoke-direct {v3, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
+
+    const-string v5, "QMODS"
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    const/high16 v5, 0x41500000    # 13.0sp
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextSize(F)V
+
+    const v5, 0xff8791a8
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextColor(I)V
+
+    const/16 v5, 0x11
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setGravity(I)V
+
+    const v5, 0x3e800000    # 0.25em letter spacing
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setLetterSpacing(F)V
 
     invoke-virtual {v0, v3}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;)V
 
-    # --- subtitle / status message ---
+    # --- headline / status message ---
     new-instance v1, Landroid/widget/TextView;
 
     invoke-direct {v1, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
 
     iput-object v1, p0, Lcom/qmods/app/auth/GateActivity;->messageView:Landroid/widget/TextView;
 
-    const/high16 v3, 0x41800000    # 16.0sp
+    const/high16 v3, 0x41a00000    # 20.0sp
 
     invoke-virtual {v1, v3}, Landroid/widget/TextView;->setTextSize(F)V
+
+    sget-object v3, Landroid/graphics/Typeface;->DEFAULT_BOLD:Landroid/graphics/Typeface;
+
+    invoke-virtual {v1, v3}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;)V
 
     const/16 v3, 0x11
 
     invoke-virtual {v1, v3}, Landroid/widget/TextView;->setGravity(I)V
 
-    const v3, 0xffb8c0d0
+    const v3, 0xffffffff
 
     invoke-virtual {v1, v3}, Landroid/widget/TextView;->setTextColor(I)V
 
@@ -135,13 +238,13 @@
 
     invoke-direct {v3, v4, v4}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V
 
-    const/high16 v5, 0x41000000    # 8.0dp top
+    const/high16 v5, 0x41400000    # 12.0dp top
 
     invoke-direct {p0, v5}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
 
     move-result v5
 
-    const/high16 v6, 0x41c00000    # 24.0dp bottom
+    const/high16 v6, 0x41e00000    # 28.0dp bottom
 
     invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
 
@@ -175,6 +278,10 @@
     const/16 v3, 0x11
 
     invoke-virtual {v1, v3}, Landroid/widget/TextView;->setGravity(I)V
+
+    const v3, 0x3f000000    # 0.5em letter spacing
+
+    invoke-virtual {v1, v3}, Landroid/widget/TextView;->setLetterSpacing(F)V
 
     const/16 v3, 0x8    # View.GONE
 
@@ -333,6 +440,87 @@
 
     invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->applyMode()V
 
+    # --- entrance: fade + slide the whole card in ---
+    const/4 v3, 0x0
+
+    invoke-virtual {v0, v3}, Landroid/view/View;->setAlpha(F)V
+
+    const/high16 v8, 0x41c00000    # 24.0dp
+
+    invoke-direct {p0, v8}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v8
+
+    int-to-float v8, v8
+
+    invoke-virtual {v0, v8}, Landroid/view/View;->setTranslationY(F)V
+
+    const-string v4, "alpha"
+
+    const/4 v5, 0x2
+
+    new-array v5, v5, [F
+
+    const/4 v6, 0x0
+
+    const/4 v7, 0x0
+
+    aput v7, v5, v6
+
+    const/4 v6, 0x1
+
+    const/high16 v7, 0x3f800000    # 1.0f
+
+    aput v7, v5, v6
+
+    invoke-static {v0, v4, v5}, Landroid/animation/ObjectAnimator;->ofFloat(Ljava/lang/Object;Ljava/lang/String;[F)Landroid/animation/ObjectAnimator;
+
+    move-result-object v4
+
+    new-instance v6, Landroid/view/animation/DecelerateInterpolator;
+
+    invoke-direct {v6}, Landroid/view/animation/DecelerateInterpolator;-><init>()V
+
+    invoke-virtual {v4, v6}, Landroid/animation/ObjectAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)V
+
+    const-wide/16 v6, 0x1c2    # 450ms
+
+    invoke-virtual {v4, v6, v7}, Landroid/animation/ObjectAnimator;->setDuration(J)Landroid/animation/ValueAnimator;
+
+    invoke-virtual {v4}, Landroid/animation/ObjectAnimator;->start()V
+
+    const-string v4, "translationY"
+
+    const/4 v5, 0x2
+
+    new-array v5, v5, [F
+
+    const/4 v6, 0x0
+
+    aput v8, v5, v6
+
+    const/4 v6, 0x1
+
+    const/4 v9, 0x0
+
+    aput v9, v5, v6
+
+    invoke-static {v0, v4, v5}, Landroid/animation/ObjectAnimator;->ofFloat(Ljava/lang/Object;Ljava/lang/String;[F)Landroid/animation/ObjectAnimator;
+
+    move-result-object v4
+
+    new-instance v6, Landroid/view/animation/DecelerateInterpolator;
+
+    invoke-direct {v6}, Landroid/view/animation/DecelerateInterpolator;-><init>()V
+
+    invoke-virtual {v4, v6}, Landroid/animation/ObjectAnimator;->setInterpolator(Landroid/animation/TimeInterpolator;)V
+
+    const-wide/16 v6, 0x1c2    # 450ms
+
+    invoke-virtual {v4, v6, v7}, Landroid/animation/ObjectAnimator;->setDuration(J)Landroid/animation/ValueAnimator;
+
+    invoke-virtual {v4}, Landroid/animation/ObjectAnimator;->start()V
+
     return-void
 .end method
 
@@ -362,8 +550,193 @@
     return v1
 .end method
 
+# Starts a looping "breathing" animation (scale + alpha) on the brand badge
+# — only while mode == "pair", to draw the eye to the Telegram button while
+# we're waiting on the user. applyMode() cancels this via stopPulse() first,
+# so switching modes never leaves a stray animator running.
+.method private startPulse()V
+    .locals 8
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->badge:Landroid/widget/FrameLayout;
+
+    const-string v1, "scaleX"
+
+    const/4 v2, 0x2
+
+    new-array v2, v2, [F
+
+    const/high16 v3, 0x3f800000    # 1.0f
+
+    const/4 v4, 0x0
+
+    aput v3, v2, v4
+
+    const/high16 v3, 0x3f900000    # 1.125f
+
+    const/4 v4, 0x1
+
+    aput v3, v2, v4
+
+    invoke-static {v0, v1, v2}, Landroid/animation/ObjectAnimator;->ofFloat(Ljava/lang/Object;Ljava/lang/String;[F)Landroid/animation/ObjectAnimator;
+
+    move-result-object v3
+
+    iput-object v3, p0, Lcom/qmods/app/auth/GateActivity;->pulseX:Landroid/animation/ObjectAnimator;
+
+    const-wide/16 v4, 0x44c    # 1100ms
+
+    invoke-virtual {v3, v4, v5}, Landroid/animation/ObjectAnimator;->setDuration(J)Landroid/animation/ValueAnimator;
+
+    const/4 v4, -0x1    # ValueAnimator.INFINITE
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatCount(I)V
+
+    const/4 v4, 0x2    # ValueAnimator.REVERSE
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatMode(I)V
+
+    invoke-virtual {v3}, Landroid/animation/ObjectAnimator;->start()V
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->badge:Landroid/widget/FrameLayout;
+
+    const-string v1, "scaleY"
+
+    const/4 v2, 0x2
+
+    new-array v2, v2, [F
+
+    const/high16 v3, 0x3f800000    # 1.0f
+
+    const/4 v4, 0x0
+
+    aput v3, v2, v4
+
+    const/high16 v3, 0x3f900000    # 1.125f
+
+    const/4 v4, 0x1
+
+    aput v3, v2, v4
+
+    invoke-static {v0, v1, v2}, Landroid/animation/ObjectAnimator;->ofFloat(Ljava/lang/Object;Ljava/lang/String;[F)Landroid/animation/ObjectAnimator;
+
+    move-result-object v3
+
+    iput-object v3, p0, Lcom/qmods/app/auth/GateActivity;->pulseY:Landroid/animation/ObjectAnimator;
+
+    const-wide/16 v4, 0x44c
+
+    invoke-virtual {v3, v4, v5}, Landroid/animation/ObjectAnimator;->setDuration(J)Landroid/animation/ValueAnimator;
+
+    const/4 v4, -0x1
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatCount(I)V
+
+    const/4 v4, 0x2
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatMode(I)V
+
+    invoke-virtual {v3}, Landroid/animation/ObjectAnimator;->start()V
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->badge:Landroid/widget/FrameLayout;
+
+    const-string v1, "alpha"
+
+    const/4 v2, 0x2
+
+    new-array v2, v2, [F
+
+    const/high16 v3, 0x3f800000    # 1.0f
+
+    const/4 v4, 0x0
+
+    aput v3, v2, v4
+
+    const/high16 v3, 0x3f200000    # 0.625f
+
+    const/4 v4, 0x1
+
+    aput v3, v2, v4
+
+    invoke-static {v0, v1, v2}, Landroid/animation/ObjectAnimator;->ofFloat(Ljava/lang/Object;Ljava/lang/String;[F)Landroid/animation/ObjectAnimator;
+
+    move-result-object v3
+
+    iput-object v3, p0, Lcom/qmods/app/auth/GateActivity;->pulseAlpha:Landroid/animation/ObjectAnimator;
+
+    const-wide/16 v4, 0x44c
+
+    invoke-virtual {v3, v4, v5}, Landroid/animation/ObjectAnimator;->setDuration(J)Landroid/animation/ValueAnimator;
+
+    const/4 v4, -0x1
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatCount(I)V
+
+    const/4 v4, 0x2
+
+    invoke-virtual {v3, v4}, Landroid/animation/ObjectAnimator;->setRepeatMode(I)V
+
+    invoke-virtual {v3}, Landroid/animation/ObjectAnimator;->start()V
+
+    return-void
+.end method
+
+# Cancels any running pulse animators and resets the badge to its resting
+# scale/alpha — called at the top of applyMode() so switching away from
+# "pair" (or re-entering it) never stacks or leaks animators.
+.method private stopPulse()V
+    .locals 2
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->pulseX:Landroid/animation/ObjectAnimator;
+
+    if-eqz v0, :no_x
+
+    invoke-virtual {v0}, Landroid/animation/ObjectAnimator;->cancel()V
+
+    :no_x
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->pulseY:Landroid/animation/ObjectAnimator;
+
+    if-eqz v0, :no_y
+
+    invoke-virtual {v0}, Landroid/animation/ObjectAnimator;->cancel()V
+
+    :no_y
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->pulseAlpha:Landroid/animation/ObjectAnimator;
+
+    if-eqz v0, :no_alpha
+
+    invoke-virtual {v0}, Landroid/animation/ObjectAnimator;->cancel()V
+
+    :no_alpha
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->badge:Landroid/widget/FrameLayout;
+
+    if-eqz v0, :done
+
+    const/high16 v1, 0x3f800000    # 1.0f
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setScaleX(F)V
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setScaleY(F)V
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setAlpha(F)V
+
+    :done
+    return-void
+.end method
+
+.method protected onDestroy()V
+    .locals 0
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->stopPulse()V
+
+    invoke-super {p0}, Landroid/app/Activity;->onDestroy()V
+
+    return-void
+.end method
+
 .method private applyMode()V
     .locals 4
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->stopPulse()V
 
     iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
 
@@ -386,6 +759,8 @@
     const-string v3, "Войти через Telegram"
 
     invoke-virtual {v2, v3}, Landroid/widget/Button;->setText(Ljava/lang/CharSequence;)V
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->startPulse()V
 
     return-void
 
