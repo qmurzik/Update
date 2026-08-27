@@ -3,7 +3,7 @@ import { confirmKeyboard, devicesKeyboard } from '../telegram/keyboards';
 import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
-import { revokeDeviceToken } from '../db';
+import { hasActiveDeviceToken, revokeDeviceTokensForUsername } from '../db';
 
 function fmtDate(ts: number): string {
   if (!ts) return '—';
@@ -17,12 +17,25 @@ export async function showDevices(ctx: Ctx): Promise<void> {
   const res = await ctx.api.devices(ctx.telegramId);
   const devices = res.devices ?? [];
 
+  // A device_token can exist in D1 without qmods.ru's own device_id
+  // reflecting it (see db.ts revokeDeviceTokensForUsername) — checked only
+  // when qmods.ru shows nothing, so the unlink button (and ONE_DEVICE_PER_
+  // ACCOUNT's block on new pairings) isn't invisible/unreachable here.
+  const username = me.user?.username;
+  const orphanToken = devices.length === 0 && username ? await hasActiveDeviceToken(ctx.env, username) : false;
+
   const lines = ['<b>📱 Устройства</b>', DIVIDER, ''];
-  if (devices.length === 0) {
+  if (devices.length === 0 && !orphanToken) {
     lines.push(
       '<blockquote>Устройство ещё не привязано</blockquote>',
       '',
       'Оно появится здесь автоматически после первого входа в приложение QMods.'
+    );
+  } else if (devices.length === 0) {
+    lines.push(
+      '<blockquote>✅ Приложение привязано</blockquote>',
+      '',
+      'Устройство не отображается здесь, но привязка активна и мешает входу с другого устройства — отвяжите её ниже.'
     );
   } else {
     lines.push('<blockquote>✅ Устройство привязано</blockquote>', '');
@@ -34,7 +47,7 @@ export async function showDevices(ctx: Ctx): Promise<void> {
     }
   }
 
-  await reply(ctx, lines.join('\n'), devicesKeyboard(devices.length > 0));
+  await reply(ctx, lines.join('\n'), devicesKeyboard(devices.length > 0 || orphanToken));
 }
 
 export async function askRemoveDevice(ctx: Ctx): Promise<void> {
@@ -46,21 +59,24 @@ export async function askRemoveDevice(ctx: Ctx): Promise<void> {
 }
 
 export async function confirmRemoveDevice(ctx: Ctx): Promise<void> {
+  const me = await ctx.api.me(ctx.telegramId);
   const devicesRes = await ctx.api.devices(ctx.telegramId);
   const device = devicesRes.devices?.[0];
-  if (!device) {
-    await reply(ctx, 'Устройство уже не привязано.');
-    return;
+
+  if (device) {
+    const result = await ctx.api.deviceRemove(ctx.telegramId, device.id);
+    if (!result.success) {
+      await reply(ctx, `Не удалось отвязать устройство: ${esc(String(result.error ?? 'ошибка'))}`);
+      return;
+    }
   }
 
-  const result = await ctx.api.deviceRemove(ctx.telegramId, device.id);
-  if (!result.success) {
-    await reply(ctx, `Не удалось отвязать устройство: ${esc(String(result.error ?? 'ошибка'))}`);
-    return;
+  // Always clear device_token(s) for the account, not just the one that
+  // happened to match qmods.ru's device_id — covers an orphaned token too
+  // (see db.ts revokeDeviceTokensForUsername).
+  if (me.user?.username) {
+    await revokeDeviceTokensForUsername(ctx.env, me.user.username);
   }
-  // If this device was paired via the app's device-auth flow, device.id IS
-  // its device_token — revoke it too, otherwise unlinking here wouldn't
-  // actually cut the app's access (see db.ts revokeDeviceToken).
-  await revokeDeviceToken(ctx.env, device.id);
+
   await showDevices(ctx);
 }

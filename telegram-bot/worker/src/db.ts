@@ -177,3 +177,19 @@ export async function revokeDeviceToken(env: Env, deviceId: string): Promise<voi
   if (!deviceId) return;
   await env.DB.prepare('DELETE FROM device_tokens WHERE token = ?').bind(deviceId).run();
 }
+
+/**
+ * Clears ALL device_tokens for an account, not just the one mirrored into
+ * qmods.ru's device_id field. Needed because that mirroring
+ * (deviceRegister() in handlers/devicePair.ts) is best-effort — if it ever
+ * fails, or a token predates it, D1 ends up with a row qmods.ru's own
+ * device_id never reflected. Since ONE_DEVICE_PER_ACCOUNT then blocks any
+ * new pairing on that orphaned row with no way to see or remove it from
+ * "Устройства" (that list is driven by qmods.ru's device_id, not this
+ * table), the "отвязать устройство" flow calls this unconditionally —
+ * not just when qmods.ru itself shows a device — see handlers/devices.ts.
+ */
+export async function revokeDeviceTokensForUsername(env: Env, username: string): Promise<void> {
+  if (!username) return;
+  await env.DB.prepare('DELETE FROM device_tokens WHERE username = ?').bind(username).run();
+}
