@@ -28,14 +28,22 @@ if (!function_exists('load_users')) {
  * привязка Telegram и т.п. Вызывайте из существующих обработчиков событий
  * (см. INTEGRATION.md), ничего в самих событиях менять не нужно.
  */
-function notify_user_event(string $usernameLower, string $title, string $message): void
+/**
+ * Возвращает id созданного уведомления (пусто при невалидных аргументах) —
+ * нужен, чтобы вызывающий код (личное сообщение из бота, отправленное
+ * сразу же через ctx.tg.sendMessage) мог тут же пометить его доставленным
+ * через mark_telegram_sent() и не получить то же самое повторно от
+ * cron-джобы в течение следующих 5 минут.
+ */
+function notify_user_event(string $usernameLower, string $title, string $message): string
 {
     $usernameLower = strtolower(trim($usernameLower));
-    if ($usernameLower === '' || $title === '' || $message === '') return;
+    if ($usernameLower === '' || $title === '' || $message === '') return '';
 
-    update_notifications(function (array $notifications) use ($usernameLower, $title, $message): array {
+    $id = bin2hex(random_bytes(16));
+    update_notifications(function (array $notifications) use ($usernameLower, $title, $message, $id): array {
         $notifications[] = [
-            'id' => bin2hex(random_bytes(16)),
+            'id' => $id,
             'title' => $title,
             'message' => $message,
             'created_at' => time(),
@@ -45,6 +53,8 @@ function notify_user_event(string $usernameLower, string $title, string $message
         ];
         return [$notifications, null];
     });
+
+    return $id;
 }
 
 /**

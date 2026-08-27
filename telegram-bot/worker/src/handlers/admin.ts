@@ -196,10 +196,19 @@ export async function handleMessageInput(ctx: Ctx, username: string, text: strin
   await logAdminAction(ctx.env, ctx.telegramId, 'send_notification', { username, title, success: res.success });
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
 
-  // Пытаемся доставить сразу же, не дожидаясь ближайшего запуска крона.
+  // Пытаемся доставить сразу же, не дожидаясь ближайшего запуска крона — и,
+  // если получилось, сразу помечаем доставленным через ackTelegramPush,
+  // иначе тот же крон (раз в 5 мин) присылает пользователю то же самое
+  // сообщение ещё раз, выглядит как "пришло с большой задержкой дублем".
   const userInfo = await ctx.adminApi.user(username);
-  if (userInfo.found && userInfo.user?.telegram_id) {
-    await ctx.tg.sendMessage(userInfo.user.telegram_id, `<b>${esc(title)}</b>\n\n${esc(body)}`).catch(() => undefined);
+  if (res.success && res.notification_id && userInfo.found && userInfo.user?.telegram_id) {
+    const sent = await ctx.tg
+      .sendMessage(userInfo.user.telegram_id, `<b>${esc(title)}</b>\n\n${esc(body)}`)
+      .then(() => true)
+      .catch(() => false);
+    if (sent) {
+      await ctx.adminApi.ackTelegramPush([{ notification_id: res.notification_id, user_id: userInfo.user.id }]).catch(() => undefined);
+    }
   }
 
   await reply(ctx, res.success ? '✅ Сообщение отправлено.' : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
@@ -267,7 +276,7 @@ export async function handleAppVersionInput(ctx: Ctx, text: string): Promise<voi
     ctx,
     res.success
       ? minVersionCode > 0
-        ? `✅ Приложения с versionCode < ${minVersionCode} теперь заблокированы до обновления.`
+        ? `✅ Приложения с versionCode меньше ${minVersionCode} теперь заблокированы до обновления.`
         : '✅ Принудительное обновление выключено.'
       : `❌ ${esc(String(res.error ?? ''))}`,
     cancelKeyboard('adm:menu')

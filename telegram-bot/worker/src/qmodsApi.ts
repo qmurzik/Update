@@ -235,7 +235,7 @@ export class QmodsAdminApi {
   }
 
   sendNotification(title: string, message: string, target?: string) {
-    return callApi(this.url, this.token, 'send_notification', { title, message, target }, 'POST');
+    return callApi<{ notification_id?: string }>(this.url, this.token, 'send_notification', { title, message, target }, 'POST');
   }
 
   pendingTelegramPushes(limit = 100) {

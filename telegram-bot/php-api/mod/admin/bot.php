@@ -421,6 +421,7 @@ if ($action === 'send_notification') {
         bot_json(['success' => false, 'error' => 'Заполните заголовок и текст.'], 400);
     }
 
+    $notificationId = '';
     if ($target !== '') {
         if (!validate_username($target)) {
             bot_json(['success' => false, 'error' => 'Некорректный ник получателя.'], 400);
@@ -429,13 +430,16 @@ if ($action === 'send_notification') {
         if ($exists === null) {
             bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
         }
-        notify_user_event(strtolower($target), $title, $message);
+        $notificationId = notify_user_event(strtolower($target), $title, $message);
     } else {
         notify_broadcast_event($title, $message);
     }
 
     log_action("Telegram notification: {$title}" . ($target !== '' ? " -> {$target}" : ' (всем)'));
-    bot_json(['success' => true, 'message' => 'Уведомление создано']);
+    // notification_id is only set for a personal message (target !== '') —
+    // lets the caller immediately mark_telegram_sent() after its own
+    // best-effort direct send, so the 5-min cron doesn't deliver it again.
+    bot_json(['success' => true, 'message' => 'Уведомление создано', 'notification_id' => $notificationId]);
 }
 
 // ============================================================
