@@ -223,7 +223,53 @@ export async function handleBroadcastInput(ctx: Ctx, text: string): Promise<void
   await clearState(ctx.env, ctx.chatId);
   await reply(
     ctx,
-    res.success ? '✅ Рассылка создана и уйдёт всем привязанным пользователям в течение нескольких минут.' : `❌ ${esc(String(res.error ?? ''))}`,
+    res.success
+      ? '✅ Рассылка создана — уйдёт в Telegram всем привязанным пользователям в течение нескольких минут, а в приложении появится при следующей проверке подписки.'
+      : `❌ ${esc(String(res.error ?? ''))}`,
+    cancelKeyboard('adm:menu')
+  );
+}
+
+/**
+ * Forced-update gate for the native app (android-client/GateActivity's
+ * "update" mode) — a second line below the version code becomes the
+ * message shown in the app; min_version_code 0 disables the gate.
+ */
+export async function askAppVersion(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  const current = await ctx.adminApi.getAppVersion();
+  await setState(ctx.env, ctx.chatId, 'admin_app_version_text');
+  await reply(
+    ctx,
+    `Текущий минимум: <b>${esc(String(current.min_version_code ?? 0))}</b>` +
+      (current.message ? `\nСообщение: ${esc(String(current.message))}` : '') +
+      `\n\nВведите новый минимальный versionCode первой строкой, дальше — текст для пользователей со старой версией. 0 — выключить принудительное обновление.`,
+    cancelKeyboard('adm:menu')
+  );
+}
+
+export async function handleAppVersionInput(ctx: Ctx, text: string): Promise<void> {
+  const { title: codeText, body: message } = splitTitleBody(text);
+  const minVersionCode = Number.parseInt(codeText, 10);
+  if (!Number.isFinite(minVersionCode) || minVersionCode < 0) {
+    await reply(ctx, 'Первая строка должна быть целым числом ≥ 0 (versionCode).', cancelKeyboard('adm:menu'));
+    return;
+  }
+  if (minVersionCode > 0 && !message) {
+    await reply(ctx, 'Нужен текст сообщения для пользователей со старой версией (вторая строка).', cancelKeyboard('adm:menu'));
+    return;
+  }
+
+  const res = await ctx.adminApi.setAppVersion(minVersionCode, message);
+  await logAdminAction(ctx.env, ctx.telegramId, 'set_app_version', { min_version_code: minVersionCode, success: res.success });
+  await clearState(ctx.env, ctx.chatId);
+  await reply(
+    ctx,
+    res.success
+      ? minVersionCode > 0
+        ? `✅ Приложения с versionCode < ${minVersionCode} теперь заблокированы до обновления.`
+        : '✅ Принудительное обновление выключено.'
+      : `❌ ${esc(String(res.error ?? ''))}`,
     cancelKeyboard('adm:menu')
   );
 }

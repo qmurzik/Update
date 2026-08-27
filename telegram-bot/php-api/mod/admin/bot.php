@@ -439,6 +439,28 @@ if ($action === 'send_notification') {
 }
 
 // ============================================================
+// GET_APP_VERSION / SET_APP_VERSION — принудительное обновление приложения
+// ============================================================
+
+if ($action === 'get_app_version') {
+    bot_json(['success' => true] + get_app_version_gate());
+}
+
+if ($action === 'set_app_version') {
+    need_post();
+    $minVersionCode = req_int($request, 'min_version_code', 0);
+    $message = req_string($request, 'message');
+
+    if ($minVersionCode < 0) {
+        bot_json(['success' => false, 'error' => 'min_version_code must be >= 0'], 400);
+    }
+
+    set_app_version_gate($minVersionCode, $message);
+    log_action("Telegram admin: set_app_version min_version_code={$minVersionCode}");
+    bot_json(['success' => true]);
+}
+
+// ============================================================
 // PENDING_TELEGRAM_PUSHES — очередь на доставку ботом (cron воркера)
 // ============================================================
 

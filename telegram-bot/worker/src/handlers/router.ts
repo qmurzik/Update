@@ -19,6 +19,7 @@ import { showReferrals } from './referrals';
 import { showAppRelease } from './app';
 import { handleReviewText, pickStar, showReview } from './reviews';
 import {
+  askAppVersion,
   askBroadcast,
   askDelete,
   askIssue,
@@ -27,6 +28,7 @@ import {
   askSearch,
   confirmDelete,
   confirmRemove,
+  handleAppVersionInput,
   handleBroadcastInput,
   handleIssueInput,
   handleMessageInput,
@@ -67,6 +69,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'adm:del:ask': askDelete,
   'adm:del:yes': confirmDelete,
   'adm:broadcast': askBroadcast,
+  'adm:appver': askAppVersion,
   'adm:card': showCurrentCard,
 };
 
@@ -93,7 +96,7 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
 
 // Text-input states only reachable from an admin flow — double-checked here
 // in case D1 state ever outlives an admin's access being revoked.
-const ADMIN_STATES = new Set(['admin_search', 'admin_issue_days', 'admin_msg_text', 'admin_broadcast_text']);
+const ADMIN_STATES = new Set(['admin_search', 'admin_issue_days', 'admin_msg_text', 'admin_broadcast_text', 'admin_app_version_text']);
 
 export async function handleUpdate(update: TgUpdate, env: Env): Promise<void> {
   if (update.callback_query) {
@@ -197,6 +200,8 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
       return handleMessageInput(ctx, String(state.payload.username ?? ''), text);
     case 'admin_broadcast_text':
       return handleBroadcastInput(ctx, text);
+    case 'admin_app_version_text':
+      return handleAppVersionInput(ctx, text);
     case 'review_text':
       return handleReviewText(ctx, Number(state.payload.rating ?? 0), text);
     default:

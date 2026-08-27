@@ -162,12 +162,20 @@ export class QmodsUserApi {
    * Narrow subscription-only lookup by username — backs `/device/subscription`
    * for the native app's device-auth flow (see db.ts). Server-to-server only:
    * the app never sees this call or this class's token, only the Worker does.
+   *
+   * Also carries the app's own `versionCode` (0 if the client didn't send
+   * one) so this single call can return the forced-update gate, and pulls
+   * any pending in-app notifications for `username` — see android-client/
+   * README.md "Проверка во время использования" for why these three
+   * concerns share one round-trip instead of three.
    */
-  subscriptionByUsername(username: string) {
+  subscriptionByUsername(username: string, versionCode = 0) {
     return callApi<{
       found: boolean;
       subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string } | null;
-    }>(this.url, this.token, 'device_subscription', { username });
+      notifications: Array<{ id: string; title: string; message: string; created_at: number }>;
+      force_update: { required: boolean; message: string };
+    }>(this.url, this.token, 'device_subscription', { username, version_code: versionCode });
   }
 }
 
@@ -238,5 +246,20 @@ export class QmodsAdminApi {
 
   ackTelegramPush(items: Array<{ notification_id: string; user_id: string }>) {
     return callApi(this.url, this.token, 'ack_telegram_push', { items }, 'POST');
+  }
+
+  /** Current forced-update gate (0 = disabled) — for showing the admin the current value before they change it. */
+  getAppVersion() {
+    return callApi<{ min_version_code: number; message: string }>(this.url, this.token, 'get_app_version');
+  }
+
+  /**
+   * Sets the minimum app versionCode allowed to keep running — the native
+   * app compares this against its own PackageInfo.versionCode on every
+   * subscription check (cold start AND the periodic in-use recheck) and
+   * blocks with `message` if it's below this. 0 disables the gate.
+   */
+  setAppVersion(minVersionCode: number, message: string) {
+    return callApi(this.url, this.token, 'set_app_version', { min_version_code: minVersionCode, message }, 'POST');
   }
 }

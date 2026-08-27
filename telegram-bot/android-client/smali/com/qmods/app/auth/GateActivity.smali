@@ -17,6 +17,10 @@
 #   "paywall" — paired but subscription inactive; shows a retry button.
 #   "error"   — the subscription check itself failed (network/server);
 #               fail-closed, same as "paywall" but different copy.
+#   "update"  — installed versionCode is below the admin-set minimum (see
+#               SubscriptionCallback.onForceUpdate); button opens the
+#               qmods.ru download page instead of rechecking, since an old
+#               build won't pass the gate no matter how many times it retries.
 # On success (paired + active) it starts MainActivity and finishes itself.
 
 .field private mode:Ljava/lang/String;
@@ -26,6 +30,8 @@
 .field private codeView:Landroid/widget/TextView;
 
 .field private actionButton:Landroid/widget/Button;
+
+.field private updateMessage:Ljava/lang/String;
 
 .field private badge:Landroid/widget/FrameLayout;
 
@@ -65,6 +71,21 @@
 
     :mode_ok
     iput-object v2, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
+
+    # Only meaningful when mode == "update" (see MainActivity.openGateForUpdate)
+    # — applyMode() falls back to a generic message if this stays empty.
+    const-string v1, "update_message"
+
+    invoke-virtual {v0, v1}, Landroid/content/Intent;->getStringExtra(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v1
+
+    if-nez v1, :update_message_ok
+
+    const-string v1, ""
+
+    :update_message_ok
+    iput-object v1, p0, Lcom/qmods/app/auth/GateActivity;->updateMessage:Ljava/lang/String;
 
     # --- root container: dark card, centered content ---
     new-instance v0, Landroid/widget/LinearLayout;
@@ -771,13 +792,46 @@
 
     move-result v3
 
-    if-eqz v3, :is_error
+    if-eqz v3, :check_update
 
     const-string v3, "Подписка не активна."
 
     invoke-virtual {v1, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
 
     const-string v3, "Проверить снова"
+
+    invoke-virtual {v2, v3}, Landroid/widget/Button;->setText(Ljava/lang/CharSequence;)V
+
+    return-void
+
+    :check_update
+    const-string v3, "update"
+
+    invoke-virtual {v3, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v3
+
+    if-eqz v3, :is_error
+
+    iget-object v3, p0, Lcom/qmods/app/auth/GateActivity;->updateMessage:Ljava/lang/String;
+
+    invoke-virtual {v3}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v3
+
+    if-eqz v3, :has_update_message
+
+    const-string v3, "Доступна новая версия приложения. Обновите его, чтобы продолжить."
+
+    goto :set_update_message
+
+    :has_update_message
+    iget-object v3, p0, Lcom/qmods/app/auth/GateActivity;->updateMessage:Ljava/lang/String;
+
+    :set_update_message
+    invoke-virtual {v1, v3}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    const-string v3, "Скачать обновление"
 
     invoke-virtual {v2, v3}, Landroid/widget/Button;->setText(Ljava/lang/CharSequence;)V
 
@@ -796,7 +850,7 @@
 .end method
 
 .method public onClick(Landroid/view/View;)V
-    .locals 2
+    .locals 3
     .param p1, "v"    # Landroid/view/View;
 
     iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
@@ -807,9 +861,36 @@
 
     move-result v1
 
-    if-eqz v1, :do_check
+    if-eqz v1, :check_update_click
 
     invoke-static {p0, p0}, Lcom/qmods/app/auth/DevicePairing;->startPairing(Landroid/content/Context;Lcom/qmods/app/auth/PairingCallback;)V
+
+    return-void
+
+    :check_update_click
+    const-string v1, "update"
+
+    invoke-virtual {v1, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v1
+
+    if-eqz v1, :do_check
+
+    # Retrying the check wouldn't help — an outdated build always fails the
+    # gate, so this button opens the download page instead.
+    new-instance v1, Landroid/content/Intent;
+
+    const-string v2, "android.intent.action.VIEW"
+
+    const-string v0, "https://qmods.ru/mod/download.php"
+
+    invoke-static {v0}, Landroid/net/Uri;->parse(Ljava/lang/String;)Landroid/net/Uri;
+
+    move-result-object v0
+
+    invoke-direct {v1, v2, v0}, Landroid/content/Intent;-><init>(Ljava/lang/String;Landroid/net/Uri;)V
+
+    invoke-virtual {p0, v1}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V
 
     return-void
 
@@ -967,6 +1048,31 @@
     const/16 v2, 0x8    # View.GONE
 
     invoke-virtual {v1, v2}, Landroid/view/View;->setVisibility(I)V
+
+    return-void
+.end method
+
+.method public onForceUpdate(Ljava/lang/String;)V
+    .locals 2
+    .param p1, "message"    # Ljava/lang/String;
+
+    const-string v0, "update"
+
+    iput-object v0, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
+
+    iput-object p1, p0, Lcom/qmods/app/auth/GateActivity;->updateMessage:Ljava/lang/String;
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->applyMode()V
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->codeView:Landroid/widget/TextView;
+
+    const-string v1, ""
+
+    invoke-virtual {v0, v1}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    const/16 v1, 0x8    # View.GONE
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
 
     return-void
 .end method

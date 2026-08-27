@@ -172,10 +172,17 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const username = await getUsernameByDeviceToken(env, token);
     if (!username) return jsonResponse({ success: false, revoked: true, error: 'Unknown or revoked device token' }, 401);
 
+    const versionCode = Number.parseInt(url.searchParams.get('version_code') ?? '', 10) || 0;
     const api = new QmodsUserApi(env);
-    const res = await api.subscriptionByUsername(username);
+    const res = await api.subscriptionByUsername(username, versionCode);
     if (!res.success) return jsonResponse({ success: false, error: 'Upstream error' }, 502);
-    return jsonResponse({ success: true, found: res.found, subscription: res.subscription });
+    return jsonResponse({
+      success: true,
+      found: res.found,
+      subscription: res.subscription,
+      notifications: res.notifications ?? [],
+      force_update: res.force_update ?? { required: false, message: '' },
+    });
   }
 
   if (url.pathname !== '/webhook' || request.method !== 'POST') {

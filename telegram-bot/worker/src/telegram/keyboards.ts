@@ -99,6 +99,7 @@ export const adminMenuKeyboard = (): InlineKeyboard => [
     { text: '🔍 Поиск по нику', callback_data: 'adm:search' },
     { text: '📣 Рассылка всем', callback_data: 'adm:broadcast' },
   ],
+  [{ text: '🚧 Мин. версия приложения', callback_data: 'adm:appver' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 

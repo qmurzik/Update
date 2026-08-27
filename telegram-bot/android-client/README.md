@@ -73,10 +73,12 @@ annotation` целиком. Она нужна только `kotlin-reflect` — 
 | `CallbackDispatcher` | Доставляет вызовы `PairingCallback` в UI-поток через `Handler` |
 | `SubscriptionChecker` | Точка входа для проверки: `isPaired`/`check`/`clearPairing` |
 | `SubscriptionCheckRunnable` | Фоновый поток: читает `device_token`, спрашивает Worker о подписке |
-| `SubscriptionCallback` | Интерфейс обратного вызова для проверки подписки |
-| `SubscriptionDispatcher` | Доставляет вызовы `SubscriptionCallback` в UI-поток |
+| `SubscriptionCallback` | Интерфейс обратного вызова для проверки подписки (`onResult`/`onError`/`onForceUpdate`) |
+| `SubscriptionDispatcher` | Доставляет `onResult`/`onError` в UI-поток |
+| `ForceUpdateDispatcher` | Доставляет `onForceUpdate` в UI-поток (отдельный класс, чтобы не трогать `SubscriptionDispatcher`) |
+| `AppNotifier` | Показывает системное уведомление (`NotificationManager`) для админских app-уведомлений — своя иконка не нужна, берётся `android.R.drawable.ic_dialog_info` из платформы |
 | `Http` | Общий блокирующий GET/POST на `HttpURLConnection`, без внешних зависимостей |
-| `GateActivity` | **Блокирующий экран** — показывается вместо контента приложения, пока не пройдена привязка и подписка не активна (см. ниже) |
+| `GateActivity` | **Блокирующий экран** — показывается вместо контента приложения, пока не пройдена привязка, подписка не активна, или версия приложения устарела (см. ниже) |
 
 Ни один класс не тянет OkHttp/Retrofit/AndroidX — только `android.*`,
 `java.*` и `org.json.*` (входит в саму платформу Android), чтобы модуль
@@ -117,6 +119,62 @@ annotation` целиком. Она нужна только `kotlin-reflect` — 
 Cloudflare Worker — только свой собственный `device_token`, который ничего
 не даёт без уже подтверждённой в Telegram привязки к конкретному аккаунту,
 и который можно отозвать в любой момент со стороны бота/кабинета.
+
+## Проверка во время использования (не только при запуске)
+
+`SubscriptionCheckRunnable` (одна и та же логика что при холодном старте) —
+запускается ещё и **каждые ~90 секунд**, пока `MainActivity` в foreground:
+`onResume()` планирует тик через `Handler.postDelayed`, `onPause()` его
+отменяет, `run()` вызывает проверку и сам себя переставляет на следующий
+тик. Это значит, что отзыв устройства, окончание подписки, принудительное
+обновление и новое app-уведомление долетают до открытого приложения без
+перезапуска — не только при следующем холодном старте.
+
+Один и тот же ответ `/device/subscription` (расширенный, см. `API.md`)
+несёт сразу три вещи:
+
+1. **`subscription`** — как и раньше, `{active, days_left, plan}`.
+2. **`notifications`** — уведомления от админа (см. ниже), показываются как
+   системные (через `AppNotifier`), не зависят от того, какой экран сейчас
+   открыт.
+3. **`force_update`** — `{required, message}`; при `required: true` вызывается
+   `SubscriptionCallback.onForceUpdate(message)` **раньше** проверки
+   активности подписки — устаревшая версия блокируется независимо от
+   статуса подписки. `GateActivity` открывается в режиме `"update"`
+   (кнопка ведёт на `https://qmods.ru/mod/download.php`, не повторяет
+   проверку — старая сборка всё равно не пройдёт гейт).
+
+### Отправка уведомлений в приложение через бота (админка)
+
+Ничего нового изобретать не пришлось — те же самые админские команды бота
+(«📣 Рассылка всем» / «📨 Написать» пользователю, `send_notification` в
+`mod/admin/bot.php`) теперь долетают и до приложения: `get_and_mark_app_notifications()`
+(`mod/includes/bot_notify.php`) читает тот же `data/notifications.json`, что
+и доставка в Telegram, просто с собственным флагом `sent_via_app` вместо
+`sent_via_telegram`. Никакой отдельной кнопки/экрана для «уведомление в
+приложение» не потребовалось.
+
+### Принудительное обновление (отключение старых версий)
+
+Команда бота **«🚧 Мин. версия приложения»** в админ-панели (`/admin`) —
+спрашивает новый `versionCode` (первая строка) и текст для пользователей
+со старой версией (остальные строки), `0` выключает гейт. Хранится в
+`data/app_version.json` (`get_app_version_gate`/`set_app_version_gate` в
+`mod/includes/bot_notify.php`), отдаётся вместе с `device_subscription`.
+Приложение сравнивает это значение с собственным
+`PackageInfo.versionCode` (см. `SubscriptionCheckRunnable.getVersionCode()`) —
+никакого ручного ввода версии в самом приложении не нужно.
+
+### Манифест
+
+Для показа системных уведомлений на Android 13+ (API 33) добавьте в
+`AndroidManifest.xml`:
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+`MainActivity.onCreate` сам запрашивает разрешение во время выполнения на
+33+ (best-effort — без него уведомления просто не показываются, это не
+крэш).
 
 ## Как работает гейт (не пускать без привязки и подписки)
 

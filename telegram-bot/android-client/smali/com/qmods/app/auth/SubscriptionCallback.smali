@@ -13,3 +13,10 @@
 # send the user through DevicePairing.startPairing() again.
 .method public abstract onError(Ljava/lang/String;)V
 .end method
+
+# Server says this device's installed app version is below the admin-set
+# minimum (see mod/admin/bot.php's set_app_version / the bot's "🚧 Мин.
+# версия приложения") — fail-closed regardless of subscription state.
+# `message` is the admin-configured text to show (may be empty).
+.method public abstract onForceUpdate(Ljava/lang/String;)V
+.end method

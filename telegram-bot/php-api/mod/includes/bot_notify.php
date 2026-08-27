@@ -200,3 +200,73 @@ function mark_bot_notifications_read(string $userId, array $notificationIds): vo
         return [$notifications, null];
     });
 }
+
+/**
+ * Уведомления для нативного Android-приложения (device_token -> username,
+ * не telegram_id) — тот же data/notifications.json, что и бот/кабинет, но
+ * с собственным флагом доставки sent_via_app, т.к. устройство опрашивает
+ * сервер синхронно (GET /device/subscription) и не нуждается в отдельном
+ * cron+ack, как доставка в Telegram (get_pending_telegram_pushes). Помечает
+ * возвращённые записи доставленными сразу же, в одном вызове.
+ */
+function get_and_mark_app_notifications(string $usernameLower, int $limit = 20): array
+{
+    $usernameLower = strtolower(trim($usernameLower));
+    if ($usernameLower === '') return [];
+
+    $result = [];
+    update_notifications(function (array $notifications) use ($usernameLower, $limit, &$result): array {
+        foreach ($notifications as &$n) {
+            if (count($result) >= $limit) break;
+
+            $target = strtolower((string)($n['target'] ?? ''));
+            if ($target !== '' && $target !== $usernameLower) continue;
+
+            $sentTo = $n['sent_via_app'] ?? [];
+            if (!is_array($sentTo)) $sentTo = [];
+            if (in_array($usernameLower, $sentTo, true)) continue;
+
+            $result[] = [
+                'id' => (string)($n['id'] ?? ''),
+                'title' => (string)($n['title'] ?? ''),
+                'message' => (string)($n['message'] ?? ''),
+                'created_at' => (int)($n['created_at'] ?? 0),
+            ];
+
+            $sentTo[] = $usernameLower;
+            $n['sent_via_app'] = $sentTo;
+        }
+        unset($n);
+        return [$notifications, null];
+    });
+
+    return $result;
+}
+
+/**
+ * Принудительное обновление приложения — data/app_version.json.
+ * min_version_code = 0 отключает гейт (пропускать все версии). Хранится
+ * отдельно от app_release.json (там только текст для страницы скачивания,
+ * без версии-числа и без какого-либо admin-действия на запись).
+ */
+function get_app_version_gate(): array
+{
+    $file = DATA_DIR . '/app_version.json';
+    $data = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+    if (!is_array($data)) $data = [];
+
+    return [
+        'min_version_code' => (int)($data['min_version_code'] ?? 0),
+        'message' => (string)($data['message'] ?? ''),
+    ];
+}
+
+function set_app_version_gate(int $minVersionCode, string $message): void
+{
+    $file = DATA_DIR . '/app_version.json';
+    file_put_contents($file, json_encode([
+        'min_version_code' => max(0, $minVersionCode),
+        'message' => $message,
+        'updated_at' => time(),
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+}

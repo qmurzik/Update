@@ -757,15 +757,28 @@ if ($action === 'device_subscription') {
         bot_json(['success' => false, 'error' => 'Invalid username'], 400);
     }
 
+    // Sent on every call (cold start AND the app's periodic in-use recheck,
+    // see android-client/README.md "Проверка во время использования") so
+    // this one action can also gate old app builds and deliver in-app
+    // notifications — without a separate endpoint/round-trip.
+    $versionCode = (int)($req['version_code'] ?? 0);
+    $gate = get_app_version_gate();
+    $forceUpdate = [
+        'required' => $gate['min_version_code'] > 0 && $versionCode > 0 && $versionCode < $gate['min_version_code'],
+        'message' => $gate['message'],
+    ];
+
     $user = null;
     foreach (load_users() as $u) {
         if (strtolower((string)($u['username'] ?? '')) === strtolower($username)) { $user = $u; break; }
     }
     if ($user === null) {
-        bot_json(['success' => true, 'found' => false, 'subscription' => null]);
+        bot_json(['success' => true, 'found' => false, 'subscription' => null, 'notifications' => [], 'force_update' => $forceUpdate]);
     }
 
     $sub = subscription_info($user);
+    $notifications = get_and_mark_app_notifications(strtolower($username), 20);
+
     bot_json([
         'success' => true,
         'found' => true,
@@ -776,6 +789,8 @@ if ($action === 'device_subscription') {
             'expires_at' => $sub['expires_at'],
             'expires_text' => $sub['expires_text'],
         ],
+        'notifications' => $notifications,
+        'force_update' => $forceUpdate,
     ]);
 }
 

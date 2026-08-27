@@ -137,11 +137,28 @@ Telegram-сессию как cookie-сессию сайта).
 приветствия/раздела статистики бота.
 
 ### `device_subscription`
-**Параметры:** `username`. Только для server-to-server вызова с Cloudflare
-Worker (device-auth хендшейк для нативного Android-приложения — см.
-`android-client/README.md` и README «Авторизация приложения через бота»).
-Отдаёт узкий срез `{found, subscription: {plan, active, days_left,
-expires_at, expires_text}}` — без id/платежей/устройства. Приложение
+**Параметры:** `username`, `version_code` (int, версия приложения —
+0, если клиент не прислал). Только для server-to-server вызова с
+Cloudflare Worker (device-auth хендшейк для нативного Android-приложения —
+см. `android-client/README.md` и README «Авторизация приложения через
+бота»). Вызывается воркером на каждой проверке подписки — и при холодном
+старте, и на периодическом re-check во время использования (см.
+android-client/README.md «Проверка во время использования»). Отдаёт:
+```json
+{
+  "success": true,
+  "found": true,
+  "subscription": { "plan": "...", "active": true, "days_left": 12, "expires_at": 0, "expires_text": "..." },
+  "notifications": [ { "id": "...", "title": "...", "message": "...", "created_at": 0 } ],
+  "force_update": { "required": false, "message": "" }
+}
+```
+`notifications` — необработанные админ-уведомления для этого `username`
+(тот же `data/notifications.json`, что и доставка в Telegram — см.
+`get_and_mark_app_notifications()`), помечаются доставленными сразу же в
+этом вызове. `force_update.required` — `true`, если `version_code` ниже
+администраторского минимума (см. `set_app_version` ниже); приложение
+использует это независимо от `subscription`, а не вместо него. Приложение
 никогда не вызывает это действие напрямую и не видит бот-токен, которым
 оно авторизовано — оно знает только `device_token`, который резолвится в
 `username` на самом воркере (`GET /device/subscription`).
@@ -197,7 +214,23 @@ device_id, даты.
 ### `send_notification` (POST)
 **Параметры:** `title`, `message`, `target` (опционально — username).
 Без `target` — рассылка всем привязанным к Telegram пользователям, с
-`target` — личное уведомление одному пользователю.
+`target` — личное уведомление одному пользователю. Тот же вызов доставляет
+и в native-приложение (см. `android-client/README.md` «Отправка
+уведомлений в приложение через бота») — отдельного действия для этого не
+существует, `device_subscription` вычитывает те же записи.
+
+### `get_app_version` *(новое)*
+Текущий гейт принудительного обновления: `{success, min_version_code,
+message}`. `min_version_code: 0` = гейт выключен.
+
+### `set_app_version` (POST) *(новое)*
+**Параметры:** `min_version_code` (int, ≥0), `message` (обязателен, если
+`min_version_code > 0`). Устанавливает минимальный `versionCode`
+нативного приложения — устройства со старой версией получают
+`force_update.required: true` в ответе `device_subscription` (см.
+`mod/api/bot.php`) и блокируются экраном `GateActivity` в режиме
+`"update"`, независимо от статуса подписки. Управляется командой бота
+«🚧 Мин. версия приложения» в `/admin`.
 
 ### `pending_telegram_pushes` *(новое)*
 **Параметры:** `limit` (1–500, по умолчанию 200).
