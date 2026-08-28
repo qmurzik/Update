@@ -6,9 +6,9 @@ import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
-import { checkRateLimit, createDevicePairing, getDevicePairing, getPaymentOrder, getUsernameByDeviceToken, markPaymentOrderPaid } from './db';
+import { checkRateLimit, createDevicePairing, getChatIdByUsername, getDevicePairing, getPaymentOrder, getUsernameByDeviceToken, markPaymentOrderPaid } from './db';
 import type { PaymentOrderRow } from './db';
-import type { TgUpdate } from './telegram/types';
+import type { InlineKeyboard, TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
 import { parseNotification, verifyNotificationSignature } from './yoomoney';
@@ -168,6 +168,58 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     if (pairing.status === 'pending') return jsonResponse({ success: true, status: 'pending' });
     if (pairing.status === 'rejected') return jsonResponse({ success: true, status: 'rejected', reason: pairing.reason ?? 'rejected' });
     return jsonResponse({ success: true, status: 'claimed', device_token: pairing.device_token });
+  }
+
+  // Alternative to opening the devicelink_ deep link — for a device that
+  // has the app but no Telegram installed on it (see android-client/
+  // README.md "Привязка по юзернейму"). The app sends the Telegram
+  // @username the account owner typed; if that account has ever messaged
+  // this bot before (from any device — that's the whole point), we can
+  // message it a Confirm/Decline prompt. If it hasn't, a Telegram bot
+  // fundamentally cannot reach it first — that's the platform's own
+  // anti-spam rule, not something this endpoint can work around.
+  if (url.pathname === '/device/pair/notify-username' && request.method === 'POST') {
+    const code = (url.searchParams.get('code') ?? '').toUpperCase();
+    const username = url.searchParams.get('username') ?? '';
+    const deviceHint = (url.searchParams.get('device') ?? '').slice(0, 60);
+    if (!code || !username) return jsonResponse({ success: false, error: 'Missing code or username' }, 400);
+
+    const allowed = await checkRateLimit(env, `device-pair-notify:${code}`, 5, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    const pairing = await getDevicePairing(env, code);
+    if (!pairing || pairing.status !== 'pending') {
+      return jsonResponse({ success: false, error: 'invalid_or_expired_code' }, 400);
+    }
+
+    const chatId = await getChatIdByUsername(env, username);
+    if (!chatId) {
+      return jsonResponse({ success: false, error: 'telegram_not_started' }, 404);
+    }
+
+    const tg = new TelegramClient(env);
+    const deviceText = esc(deviceHint || 'неизвестное устройство');
+    const text =
+      `🔐 <b>Вход в приложение QMods</b>\n\nКто-то пытается войти в приложение с устройства: <b>${deviceText}</b>.\n\n` +
+      'Если это вы — подтвердите ниже. Если нет — просто отклоните, ничего не произойдёт.';
+    const keyboard: InlineKeyboard = [
+      [
+        { text: '✅ Подтвердить', callback_data: `devicepair:confirm:${code}` },
+        { text: '❌ Отклонить', callback_data: `devicepair:reject:${code}` },
+      ],
+    ];
+
+    try {
+      await tg.sendMessage(chatId, text, keyboard);
+    } catch (err) {
+      // Most likely the account blocked the bot after its last message —
+      // we still have a chat_id on file (upsertTelegramUser doesn't know
+      // that), but can't actually reach them.
+      console.error('device pair notify-username sendMessage failed', chatId, err);
+      return jsonResponse({ success: false, error: 'telegram_unreachable' }, 502);
+    }
+
+    return jsonResponse({ success: true });
   }
 
   if (url.pathname === '/device/subscription' && request.method === 'GET') {

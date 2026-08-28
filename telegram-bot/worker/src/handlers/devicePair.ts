@@ -1,12 +1,21 @@
 import type { Ctx } from './context';
-import { claimDevicePairing } from '../db';
+import { claimDevicePairing, rejectDevicePairing } from '../db';
 import { mainMenu } from '../telegram/keyboards';
 import { esc } from '../util';
 import { reply } from './reply';
 
 /**
- * Handles `/start devicelink_<CODE>` — the deep link the Android app opens
- * once it has started a pairing (`POST /device/pair/start` in index.ts).
+ * Claims a device pairing code — reused by two different triggers that
+ * both guarantee "only the account being paired could have reached this":
+ *   1. `/start devicelink_<CODE>` — the deep link the Android app opens
+ *      directly (`POST /device/pair/start` in index.ts).
+ *   2. `devicepair:confirm:<CODE>` — a button tap on the confirmation
+ *      message sent to a chat_id resolved from a typed @username (the
+ *      "нет Telegram на этом телефоне" flow — see
+ *      `/device/pair/notify-username` in index.ts and android-client/
+ *      README.md "Привязка по юзернейму"). Only the matching account's own
+ *      chat ever receives that message, so tapping Confirm has the same
+ *      security property as opening the deep link.
  * Requires the chat's Telegram account to already be linked to a qmods.ru
  * account (via the normal `/link` flow); claiming just binds that same
  * account to whichever device generated the code.
@@ -51,5 +60,16 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     ctx,
     `✅ Приложение привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда больше не нужно — приложение само определит, что привязка прошла.`,
     mainMenu(ctx.env, true, false)
+  );
+}
+
+/** `devicepair:reject:<CODE>` — the "Отклонить" button on the same confirmation message as handleDevicePairClaim's second trigger above. */
+export async function handleDevicePairReject(ctx: Ctx, code: string): Promise<void> {
+  await rejectDevicePairing(ctx.env, code);
+  const me = await ctx.api.me(ctx.telegramId);
+  await reply(
+    ctx,
+    '❌ Вход отклонён. Если это были не вы — можно больше ничего не делать, попытка входа не будет завершена.',
+    mainMenu(ctx.env, !!me.linked, false)
   );
 }

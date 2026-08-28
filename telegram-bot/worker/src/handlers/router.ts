@@ -1,11 +1,11 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { buildCtx } from './context';
-import { clearState, getState, setState } from '../db';
+import { clearState, getState, setState, upsertTelegramUser } from '../db';
 import { reportError } from '../errorReport';
 import type { TgUpdate } from '../telegram/types';
 import { handleInlineQuery } from './inline';
-import { handleDevicePairClaim } from './devicePair';
+import { handleDevicePairClaim, handleDevicePairReject } from './devicePair';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
 import { showProfile } from './profile';
@@ -101,6 +101,17 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
     const orderId = data.slice('pay:check:'.length);
     return (ctx) => checkOrderStatus(ctx, orderId);
   }
+  // Buttons on the confirmation message sent by /device/pair/notify-username
+  // — see handlers/devicePair.ts and android-client/README.md "Привязка по
+  // юзернейму". Same CODE_RE as the devicelink_ deep link above.
+  if (data.startsWith('devicepair:confirm:')) {
+    const code = data.slice('devicepair:confirm:'.length);
+    if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) return (ctx) => handleDevicePairClaim(ctx, code);
+  }
+  if (data.startsWith('devicepair:reject:')) {
+    const code = data.slice('devicepair:reject:'.length);
+    if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) return (ctx) => handleDevicePairReject(ctx, code);
+  }
   return null;
 }
 
@@ -109,6 +120,12 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
 const ADMIN_STATES = new Set(['admin_search', 'admin_issue_days', 'admin_msg_text', 'admin_broadcast_text', 'admin_app_version_text']);
 
 export async function handleUpdate(update: TgUpdate, env: Env): Promise<void> {
+  const from = update.message?.from ?? update.callback_query?.from;
+  const chatId = update.message?.chat.id ?? update.callback_query?.message?.chat.id;
+  if (from && chatId !== undefined) {
+    await upsertTelegramUser(env, String(chatId), from.username ?? null, from.first_name).catch((err) => console.error('upsertTelegramUser failed', err));
+  }
+
   if (update.callback_query) {
     await handleCallback(update, env);
     return;

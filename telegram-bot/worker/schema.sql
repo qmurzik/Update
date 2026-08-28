@@ -24,6 +24,22 @@ CREATE TABLE IF NOT EXISTS rate_limits (
     window_start  INTEGER NOT NULL
 );
 
+-- Every chat that has ever messaged/pressed a button on the bot, upserted on
+-- every single update (handlers/router.ts handleUpdate) — regardless of
+-- whether that chat is linked to a qmods.ru account. The ONLY purpose is
+-- resolving a typed @username to a chat_id for the device-pairing-by-
+-- username flow (see handlers/devicePair.ts, android-client/README.md
+-- "Привязка по юзернейму") — Telegram bots cannot message a chat_id they've
+-- never received an update from, so a username with no row here truly can't
+-- be reached and the app is told to open the bot and press Start first.
+CREATE TABLE IF NOT EXISTS telegram_users (
+    chat_id     TEXT PRIMARY KEY,
+    username    TEXT,             -- lowercase, no leading @; NULL if the account has none
+    first_name  TEXT,
+    last_seen   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_telegram_users_username ON telegram_users(username);
+
 -- Audit trail for admin actions taken through the bot (issue/remove/delete
 -- subscription, broadcast/direct messages). Independent of qmods.ru's own
 -- data/actions.log, so bot-originated actions are traceable from either side.

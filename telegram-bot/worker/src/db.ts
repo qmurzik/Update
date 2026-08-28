@@ -246,3 +246,36 @@ export async function markPaymentOrderPaid(env: Env, id: string, operationId: st
     .run();
   return (res.meta.changes ?? 0) > 0;
 }
+
+/**
+ * Upserted on every single incoming update (handlers/router.ts
+ * handleUpdate), regardless of whether the chat is linked — this is the
+ * only way to later resolve a typed @username to a chat_id (see
+ * getChatIdByUsername), since Telegram bots can't message a chat_id
+ * they've never received an update from.
+ */
+export async function upsertTelegramUser(env: Env, chatId: string, username: string | null, firstName: string): Promise<void> {
+  const usernameLower = username ? username.toLowerCase() : null;
+  await env.DB.prepare(
+    `INSERT INTO telegram_users (chat_id, username, first_name, last_seen) VALUES (?, ?, ?, ?)
+     ON CONFLICT(chat_id) DO UPDATE SET username = excluded.username, first_name = excluded.first_name, last_seen = excluded.last_seen`
+  )
+    .bind(chatId, usernameLower, firstName, Date.now())
+    .run();
+}
+
+/** Resolves a @username (leading @ optional, case-insensitive) to a chat_id — null if that account has never messaged the bot. */
+export async function getChatIdByUsername(env: Env, username: string): Promise<string | null> {
+  const usernameLower = username
+    .trim()
+    .replace(/^@/, '')
+    .toLowerCase();
+  if (!usernameLower) return null;
+  const row = await env.DB.prepare('SELECT chat_id FROM telegram_users WHERE username = ?').bind(usernameLower).first<{ chat_id: string }>();
+  return row ? row.chat_id : null;
+}
+
+/** Declines a device-pairing-by-username request — the app's poll sees status 'rejected' with this reason (same field DevicePairingRunnable already reads for ONE_DEVICE_PER_ACCOUNT). */
+export async function rejectDevicePairing(env: Env, code: string): Promise<void> {
+  await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'declined_by_user' WHERE code = ? AND status = 'pending'").bind(code).run();
+}
