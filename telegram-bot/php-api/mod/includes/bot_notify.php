@@ -411,14 +411,40 @@ function render_update_required_block(?array $user = null): void
 
         if ($code !== '') {
             $username = htmlspecialchars((string)($user['username'] ?? ''), ENT_QUOTES, 'UTF-8');
-            $deepLink = 'https://t.me/qmods_bot?start=link_' . $code;
+            $escCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
+
+            // Обычный https://t.me/... клик внутри WebView старого приложения
+            // просто грузит эту ссылку КАК СТРАНИЦУ внутри самого WebView —
+            // Android не резолвит http(s)-ссылки во внешние intent'ы сам по
+            // себе, для этого нужен код в самом приложении (shouldOverrideUrlLoading),
+            // которого у нас нет. Обходной путь БЕЗ правки приложения — синтаксис
+            // intent:// с фрагментом #Intent;...;end: это встроенный механизм
+            // самого Chromium (на котором работает системный Android WebView) —
+            // он сам просит ОС открыть указанный package, и если Telegram не
+            // установлен — сам же открывает browser_fallback_url вместо ошибки.
+            // Подробнее: https://developer.chrome.com/docs/multidevice/android/intents
+            $fallbackUrl = 'https://t.me/qmods_bot?start=link_' . $code;
+            $intentUrl = 'intent://resolve?domain=qmods_bot&start=link_' . $code
+                . '#Intent;scheme=tg;package=org.telegram.messenger;S.browser_fallback_url='
+                . rawurlencode($fallbackUrl) . ';end';
+
             $linkSection =
                 '<div style="margin-top:20px;padding-top:20px;border-top:1px solid #1b2333">'
                 . '<div class="d" style="margin-bottom:12px">Аккаунт <b style="color:#f1f5f9">' . $username . '</b> ещё активен. '
                 . 'Привяжите Telegram сейчас, чтобы не потерять доступ после обновления:</div>'
-                . '<a href="' . $deepLink . '" style="background:#3157ff">Открыть бота и привязать</a>'
-                . '<div class="d" style="margin-top:12px">Или введите код в боте вручную: '
-                . '<b style="color:#9db4ff;letter-spacing:2px">' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '</b> (10 минут)</div>'
+                . '<a href="' . htmlspecialchars($intentUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#3157ff">Открыть бота и привязать</a>'
+                . '<div class="d" style="margin-top:10px;font-size:12px">Не открылось? '
+                . '<a href="' . htmlspecialchars($fallbackUrl, ENT_QUOTES, 'UTF-8') . '" style="display:inline;padding:0;background:none;color:#9db4ff;font-weight:400">попробуйте обычную ссылку</a>'
+                . '</div>'
+                . '<div class="d" style="margin-top:16px">Или введите код в боте (@qmods_bot) вручную — действует 10 минут:</div>'
+                . '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px">'
+                . '<input id="qm-code" readonly value="' . $escCode . '" onclick="this.select()" '
+                . 'style="background:#1b2333;color:#9db4ff;border:none;border-radius:8px;padding:10px 14px;'
+                . 'font-size:16px;letter-spacing:2px;text-align:center;width:150px">'
+                . '<button type="button" onclick="var i=document.getElementById(\'qm-code\');i.select();'
+                . 'i.setSelectionRange(0,99);try{document.execCommand(\'copy\')}catch(e){}" '
+                . 'style="margin:0;padding:10px 14px;background:#1b2333;border:none">📋</button>'
+                . '</div>'
                 . '</div>';
         }
     }
