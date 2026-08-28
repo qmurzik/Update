@@ -359,10 +359,14 @@ if ($action === 'link') {
 // (миграция: альтернатива /link для тех, кто ещё не заводил аккаунт на
 // qmods.ru). Создаёт пользователя без поля password — тот же формат, что
 // и create-ветка admin/bot.php?action=issue (админские бот-аккаунты уже
-// годами создаются так же, это не новый паттерн). Подписки/plan по
-// умолчанию нет ('none') — как и при снятии подписки (action=remove);
-// если реальная регистрация на сайте даёт пробный период — поправьте
-// $newExpiresAt ниже под ваши правила.
+// годами создаются так же, это не новый паттерн). Даёт пробный период
+// 24 часа — как и device_id-регистрация на сайте (register.php,
+// 'plan' => 'trial', expires_at = time() + 86400) — но не более ОДНОГО
+// раза на telegram_id, независимо от того, сколько раз аккаунт с этим
+// telegram_id создавался/удалялся/отвязывался (см.
+// bot_trial_already_claimed()/bot_trial_mark_claimed() в bot_notify.php —
+// у бота нет device_id/IP для антифрода, как у сайта, поэтому ключ —
+// сам telegram_id).
 // ============================================================
 
 if ($action === 'register') {
@@ -392,7 +396,15 @@ if ($action === 'register') {
         }
     }
 
-    [$ok, $result] = update_users(function (array $users) use ($username, $usernameLower, $telegramId): array {
+    // Считаем ДО lock'а на users.json — не страшно, если решение по гонке
+    // окажется на волосок устаревшим (отдельный лок-файл), а не наоборот:
+    // отмечаем "использовано" только ПОСЛЕ подтверждённого создания аккаунта.
+    $grantTrial = !bot_trial_already_claimed($telegramId);
+    $subscription = $grantTrial
+        ? ['plan' => 'trial', 'expires_at' => time() + 86400]
+        : ['plan' => 'none', 'expires_at' => 0];
+
+    [$ok, $result] = update_users(function (array $users) use ($username, $usernameLower, $telegramId, $subscription): array {
         // Авторитетная перепроверка внутри блокировки — то, что уже
         // проверено выше на устаревшем снимке, могло измениться между
         // load_users() и получением lock'а.
@@ -412,7 +424,7 @@ if ($action === 'register') {
             'created_at' => time(),
             'telegram_id' => $telegramId,
             'device_id' => '',
-            'subscription' => ['plan' => 'none', 'expires_at' => 0],
+            'subscription' => $subscription,
             'payments' => [],
         ];
         return [$users, ['success' => true]];
@@ -423,8 +435,12 @@ if ($action === 'register') {
         bot_json(['success' => false, 'error' => $result['error']], 409);
     }
 
-    log_action('Telegram register: ' . $username . ' / ' . $telegramId);
-    bot_json(['success' => true, 'username' => $username]);
+    if ($grantTrial) {
+        bot_trial_mark_claimed($telegramId);
+    }
+
+    log_action('Telegram register: ' . $username . ' / ' . $telegramId . ($grantTrial ? ' (+trial 24h)' : ' (trial already used)'));
+    bot_json(['success' => true, 'username' => $username, 'trial' => $grantTrial]);
 }
 
 // ============================================================

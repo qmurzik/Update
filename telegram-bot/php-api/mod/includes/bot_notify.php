@@ -344,6 +344,34 @@ function set_site_auth_gate(bool $enabled): void
 }
 
 /**
+ * Антиабуз пробного периода для регистрации ПРЯМО В БОТЕ (см. `register`
+ * в mod/api/bot.php) — data/bot_trial_claims.json, ключ telegram_id.
+ * Независим от users.json НАРОЧНО: удаление аккаунта (admin delete_user)
+ * или отвязка (/unlink) не должны позволять тому же Telegram-аккаунту
+ * зарегистрироваться заново под новым ником и получить второй пробный
+ * период — запись переживает жизненный цикл самого аккаунта.
+ *
+ * Это НЕ то же самое, что trial_fraud_check()/trial_fraud_mark() в
+ * includes/bootstrap.php — та механика заточена под device_id/IP (сайт,
+ * приложение через login.php/register.php), у бота таких сигналов нет,
+ * единственный устойчивый идентификатор — telegram_id.
+ */
+function bot_trial_already_claimed(string $telegramId): bool
+{
+    return with_locked_json_file(DATA_DIR . '/bot_trial_claims.json', function (array $data) use ($telegramId): array {
+        return [$data, !empty($data[$telegramId])];
+    });
+}
+
+function bot_trial_mark_claimed(string $telegramId): void
+{
+    with_locked_json_file(DATA_DIR . '/bot_trial_claims.json', function (array $data) use ($telegramId): array {
+        $data[$telegramId] = time();
+        return [$data, null];
+    });
+}
+
+/**
  * Экран "вход/регистрация переехали в бота" — печатает страницу и
  * завершает запрос. Вызывать из login.php/register.php ТОЛЬКО когда
  * $device_id === '' (обычный браузерный визит) — device_id-флоу

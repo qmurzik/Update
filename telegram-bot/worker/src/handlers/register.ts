@@ -51,7 +51,10 @@ export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promi
     if (ctx.incomingMessageId) {
       await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '🎉').catch(() => undefined);
     }
-    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? username))}</b> создан и привязан к Telegram!`);
+    const trialText = result.trial
+      ? '\n\n🎁 Вам открыт пробный доступ на 24 часа.'
+      : '\n\nЧтобы пользоваться QMods — оформите подписку в разделе «⭐ Подписка».';
+    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? username))}</b> создан и привязан к Telegram!${trialText}`);
     return;
   }
 

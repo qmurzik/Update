@@ -91,7 +91,7 @@ export class QmodsUserApi {
    * links telegram_id immediately, no site password involved.
    */
   register(telegramId: string, username: string) {
-    return callApi<{ username?: string }>(this.url, this.token, 'register', { telegram_id: telegramId, username }, 'POST');
+    return callApi<{ username?: string; trial?: boolean }>(this.url, this.token, 'register', { telegram_id: telegramId, username }, 'POST');
   }
 
   devices(telegramId: string) {
