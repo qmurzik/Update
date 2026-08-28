@@ -310,6 +310,32 @@ username и вызывает `revokeDeviceTokensForUsername()` + зеркали�
 (что практически невозможно — он просто больше нигде не хранится), его
 поймает обычная проверка `revoked`-логики. `onDone` вызывается в UI-потоке.
 
+### Скрытый вызов через App Shortcut
+
+Если в UI хост-приложения нет места под явную кнопку «Выйти» (как в
+`instashopper`), `unlink()` можно повесить на **статический App
+Shortcut** — пункт меню долгого нажатия на иконку приложения на рабочем
+столе. Это OS-нативный механизм: работает одинаково при жестовой и
+кнопочной навигации, в отличие от перехвата `KeyEvent.KEYCODE_BACK`
+(жестовые свайпы «Назад» на многих прошивках, включая Samsung One UI,
+вообще не порождают `KeyEvent` — вместо этого их обрабатывает
+`onBackPressed()`/predictive-back API, так что `onKeyDown`/`onKeyUp`
+такой свайп никогда не увидят).
+
+Три части:
+
+1. **`res/xml/shortcuts.xml`** — `<shortcut>` с `<intent
+   android:action="...LOGOUT" android:targetClass="...MainActivity">`.
+2. **`<meta-data android:name="android.app.shortcuts"
+   android:resource="@xml/shortcuts"/>`** — внутри `<activity>` в
+   `AndroidManifest.xml`.
+3. В `MainActivity` — проверка `Intent.getAction()` и в `onCreate`
+   (холодный старт), и в `onNewIntent` (если Activity уже открыта —
+   актуально при `launchMode="singleTask"`, иначе тап по шорткату не
+   долетит до уже запущенного экрана): если action совпал — вызвать
+   `SubscriptionChecker.unlink(this, this)` вместо обычной проверки
+   подписки.
+
 ## Краш-репорты
 
 `CrashHandler.install(context)` — вызовите один раз, как можно раньше
