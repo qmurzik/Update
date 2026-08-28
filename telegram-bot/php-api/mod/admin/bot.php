@@ -348,7 +348,8 @@ if ($action === 'record_payment') {
 
     $finalExpiresAt = null;
     $userId = '';
-    [$ok, $result] = update_users(function (array $users) use ($username, $plan, $days, $amount, &$finalExpiresAt, &$userId): array {
+    $refResult = ['awarded' => false];
+    [$ok, $result] = update_users(function (array $users) use ($username, $plan, $days, $amount, &$finalExpiresAt, &$userId, &$refResult): array {
         $found = false;
         foreach ($users as &$user) {
             if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
@@ -372,6 +373,13 @@ if ($action === 'record_payment') {
         unset($user);
 
         if (!$found) return [$users, ['error' => 'Пользователь не найден.']];
+
+        // Бонус приглашавшему — только за первую оплату приглашённого, см.
+        // bot_award_referral_bonus() в includes/bot_notify.php. Внутри
+        // update_users() и после записи платежа, чтобы count(payments)===1
+        // считался по уже актуальному состоянию, атомарно с самой оплатой.
+        $refResult = bot_award_referral_bonus($users, strtolower(trim($username)));
+
         return [$users, ['success' => true]];
     });
 
@@ -386,6 +394,16 @@ if ($action === 'record_payment') {
     // — same fix as handleMessageInput's duplicate-delivery bug.
     $notificationId = notify_user_event(strtolower($username), '💰 Оплата прошла успешно', $message);
     notify_admin_payment_event(strtolower($username), $plan, $amount, $days);
+
+    if (!empty($refResult['awarded'])) {
+        $refDays = (int)$refResult['days'];
+        log_action("Telegram bot payment: referral bonus +{$refDays}d to {$refResult['referrer']} for {$username}");
+        notify_user_event(
+            strtolower((string)$refResult['referrer']),
+            '🎁 Бонус за приглашение',
+            "Ваш друг {$username} оплатил подписку — начислила вам +{$refDays} дн."
+        );
+    }
 
     bot_json(['success' => true, 'message' => $message, 'expires_at' => $finalExpiresAt, 'user_id' => $userId, 'notification_id' => $notificationId]);
 }

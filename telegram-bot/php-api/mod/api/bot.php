@@ -159,6 +159,17 @@ function bot_make_ref_code(array $users): string
     return $code;
 }
 
+/** Тот же алгоритм, что и ref_find_owner() в includes/referrals.php — регистронезависимое сравнение ref_code. */
+function bot_find_ref_owner(array $users, string $code): ?array
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') return null;
+    foreach ($users as $u) {
+        if (strtoupper((string)($u['ref_code'] ?? '')) === $code) return $u;
+    }
+    return null;
+}
+
 $req = bot_request_data();
 $action = trim((string)($req['action'] ?? ''));
 
@@ -372,6 +383,12 @@ if ($action === 'link') {
 if ($action === 'register') {
     $telegramId = trim((string)($req['telegram_id'] ?? ''));
     $username = trim((string)($req['username'] ?? ''));
+    // Код из t.me/qmods_bot?start=ref_<CODE> (bot deep link) — см. handlers/
+    // register.ts startWithReferral(). Неизвестный/пустой код НЕ блокирует
+    // регистрацию (в отличие от register.php на сайте) — битая реферальная
+    // ссылка не должна стоить нам живого пользователя, просто не начислится
+    // бонус приглашавшему.
+    $refCode = trim((string)($req['ref'] ?? ''));
 
     if (!valid_telegram_id($telegramId)) {
         bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
@@ -382,6 +399,11 @@ if ($action === 'register') {
 
     $usernameLower = strtolower($username);
     $users = load_users();
+    $referredBy = '';
+    if ($refCode !== '') {
+        $refOwner = bot_find_ref_owner($users, $refCode);
+        if ($refOwner !== null) $referredBy = (string)($refOwner['username'] ?? '');
+    }
 
     foreach ($users as $u) {
         if ((string)($u['telegram_id'] ?? '') === $telegramId) {
@@ -404,7 +426,7 @@ if ($action === 'register') {
         ? ['plan' => 'trial', 'expires_at' => time() + 86400]
         : ['plan' => 'none', 'expires_at' => 0];
 
-    [$ok, $result] = update_users(function (array $users) use ($username, $usernameLower, $telegramId, $subscription): array {
+    [$ok, $result] = update_users(function (array $users) use ($username, $usernameLower, $telegramId, $subscription, $referredBy): array {
         // Авторитетная перепроверка внутри блокировки — то, что уже
         // проверено выше на устаревшем снимке, могло измениться между
         // load_users() и получением lock'а.
@@ -426,6 +448,7 @@ if ($action === 'register') {
             'device_id' => '',
             'subscription' => $subscription,
             'payments' => [],
+            'referred_by' => $referredBy,
         ];
         return [$users, ['success' => true]];
     });
@@ -753,7 +776,11 @@ if ($action === 'referrals') {
     bot_json([
         'success' => true,
         'ref_code' => (string)($user['ref_code'] ?? ''),
-        'ref_link' => 'https://qmods.ru/mod/register.php?ref=' . urlencode((string)($user['ref_code'] ?? '')),
+        // Ссылка ведёт в БОТА (t.me/qmods_bot?start=ref_<CODE>), не на сайт —
+        // register.ts startWithReferral() ловит ref_<CODE> и передаёт его в
+        // action=register как `ref`. До этой правки вела на mod/register.php,
+        // что уводило приглашённых мимо бота (миграция на Telegram-only доступ).
+        'ref_link' => 'https://t.me/qmods_bot?start=ref_' . urlencode((string)($user['ref_code'] ?? '')),
         'ref_count' => $refCount,
     ]);
 }

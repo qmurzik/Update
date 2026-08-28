@@ -8,7 +8,7 @@ import { handleInlineQuery } from './inline';
 import { handleDevicePairClaim, handleDevicePairReject } from './devicePair';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
-import { cancelRegister, handleRegisterUsernameInput, startRegister } from './register';
+import { cancelRegister, handleRegisterUsernameInput, startRegister, startWithReferral } from './register';
 import { showProfile } from './profile';
 import { showSubscription } from './subscription';
 import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
@@ -239,6 +239,15 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
         if (paidReturn) {
           return handlePaidReturn(ctx, paidReturn[1]);
         }
+        // Referral link from `me`'s ref_link (mod/api/bot.php) —
+        // t.me/<bot>?start=ref_<CODE>. See handlers/register.ts
+        // startWithReferral — carries the code into registration only,
+        // doesn't apply to /link (an existing account already has whatever
+        // referred_by it was created with, if any).
+        const refLink = /^ref_([0-9A-F]{6})$/.exec(payload);
+        if (refLink) {
+          return startWithReferral(ctx, refLink[1]);
+        }
         return handleStart(ctx);
       }
       case '/menu':
@@ -280,7 +289,7 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
     case 'link_code':
       return handleLinkCodeInput(ctx, text);
     case 'register_username':
-      return handleRegisterUsernameInput(ctx, text);
+      return handleRegisterUsernameInput(ctx, text, String(state.payload.ref ?? ''));
     case 'admin_search':
       return handleSearchInput(ctx, text);
     case 'admin_issue_days':

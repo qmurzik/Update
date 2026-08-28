@@ -371,6 +371,75 @@ function bot_trial_mark_claimed(string $telegramId): void
     });
 }
 
+const BOT_REF_BONUS_DAYS = 3;
+
+/**
+ * Начисляет бонус пригласившему за ПЕРВУЮ оплату приглашённого — тот же
+ * принцип, что ref_award_first_payment() в (легаси-) includes/referrals.php
+ * на сайте, только вызывается из бот-нативного record_payment (см.
+ * mod/admin/bot.php) — до этой правки бот-платежи вообще не награждали
+ * рефералов, потому что record_payment ту функцию никогда не вызывал (на
+ * сайте она висела только в старом subscribe/notify.php).
+ *
+ * Вызывать ВНУТРИ update_users(), сразу после того как $users[$buyerIdx]
+ * получил свой платёж — count(payments)===1 проверяет "это первая оплата"
+ * по уже обновлённому массиву.
+ *
+ * @return array{awarded:bool, reason?:string, referrer?:string, days?:int}
+ */
+function bot_award_referral_bonus(array &$users, string $buyerUsernameLower): array
+{
+    $buyerIdx = null;
+    foreach ($users as $i => $u) {
+        if (($u['username_lower'] ?? '') === $buyerUsernameLower) { $buyerIdx = $i; break; }
+    }
+    if ($buyerIdx === null) return ['awarded' => false, 'reason' => 'buyer_not_found'];
+
+    if (!empty($users[$buyerIdx]['ref_bonus_given'])) {
+        return ['awarded' => false, 'reason' => 'already_given'];
+    }
+
+    $inviterName = trim((string)($users[$buyerIdx]['referred_by'] ?? ''));
+    if ($inviterName === '') return ['awarded' => false, 'reason' => 'no_referrer'];
+
+    $payments = $users[$buyerIdx]['payments'] ?? [];
+    if (!is_array($payments) || count($payments) > 1) {
+        return ['awarded' => false, 'reason' => 'not_first_payment'];
+    }
+
+    $inviterIdx = null;
+    foreach ($users as $i => $u) {
+        if (strcasecmp((string)($u['username'] ?? ''), $inviterName) === 0) { $inviterIdx = $i; break; }
+    }
+    if ($inviterIdx === null)      return ['awarded' => false, 'reason' => 'referrer_not_found'];
+    if ($inviterIdx === $buyerIdx) return ['awarded' => false, 'reason' => 'self_referral'];
+
+    // Одно и то же устройство у обоих — накрутка, бонус не начисляем.
+    $buyerDevice   = trim((string)($users[$buyerIdx]['device_id'] ?? ''));
+    $inviterDevice = trim((string)($users[$inviterIdx]['device_id'] ?? ''));
+    if ($buyerDevice !== '' && $buyerDevice === $inviterDevice) {
+        return ['awarded' => false, 'reason' => 'same_device'];
+    }
+
+    $now     = time();
+    $expires = (int)($users[$inviterIdx]['subscription']['expires_at'] ?? 0);
+    $base    = $expires > $now ? $expires : $now;
+
+    $users[$inviterIdx]['subscription']['expires_at'] = $base + BOT_REF_BONUS_DAYS * 86400;
+    $plan = (string)($users[$inviterIdx]['subscription']['plan'] ?? '');
+    if ($plan === '' || $plan === 'none') {
+        $users[$inviterIdx]['subscription']['plan'] = 'bonus';
+    }
+
+    $users[$buyerIdx]['ref_bonus_given'] = true;
+
+    return [
+        'awarded'  => true,
+        'referrer' => (string)$users[$inviterIdx]['username'],
+        'days'     => BOT_REF_BONUS_DAYS,
+    ];
+}
+
 /**
  * Экран "вход/регистрация переехали в бота" — печатает страницу и
  * завершает запрос. Вызывать из login.php/register.php ТОЛЬКО когда

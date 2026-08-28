@@ -103,11 +103,29 @@ form-data или query-string (объединяются, JSON-тело имее�
 `newly_unlocked`/`level_up`/`bonus_days` ненулевые только в тот вызов,
 когда достижение/уровень выданы — бот показывает поздравление один раз.
 
+### `register` (POST)
+**Параметры:** `telegram_id`, `username` (3–20 симв.: латиница, цифры, `_`,
+`-`), `ref` *(опционально)*. Создаёт новый аккаунт без сайта — прямо из
+бота (см. handlers/register.ts). `ref` — код из `t.me/qmods_bot?start=ref_
+<CODE>` (см. `referrals` ниже); если код найден — новый аккаунт сразу
+получает `referred_by`. Неизвестный/пустой код НЕ блокирует регистрацию
+(в отличие от `register.php` на сайте) — просто не будет бонуса
+приглашавшему. Даёт пробный доступ на 24 часа, один раз на `telegram_id`
+(см. `bot_trial_already_claimed()`).
+```json
+{"success": true, "username": "vasya", "trial": true}
+```
+
 ### `referrals`
 **Параметры:** `telegram_id`. Лениво генерирует `ref_code` при первом
 обращении (как `cabinet.php`), возвращает код, ссылку и счётчик приглашённых.
+`ref_link` — ссылка НА БОТА (`t.me/qmods_bot?start=ref_<CODE>`), не на
+сайт *(изменено — раньше вела на `mod/register.php?ref=...`, что уводило
+приглашённых мимо бота)*. Бонус приглашавшему (+3 дня) начисляется при
+ПЕРВОЙ оплате приглашённого через `record_payment` — см.
+`bot_award_referral_bonus()` в `includes/bot_notify.php`.
 ```json
-{"success": true, "ref_code": "AB12CD", "ref_link": "https://qmods.ru/mod/register.php?ref=AB12CD", "ref_count": 3}
+{"success": true, "ref_code": "AB12CD", "ref_link": "https://t.me/qmods_bot?start=ref_AB12CD", "ref_count": 3}
 ```
 
 ### `app_release`
@@ -227,7 +245,10 @@ device_id, даты.
 user_id, notification_id}` — `user_id`/`notification_id` нужны только
 вызывающей стороне, чтобы сразу подтвердить доставку через
 `ack_telegram_push` и не получить то же сообщение повторно от 5-минутного
-крона.
+крона. Заодно — атомарно, внутри той же блокировки `update_users()` — вызывает
+`bot_award_referral_bonus()`: если это ПЕРВАЯ оплата покупателя и у него
+есть `referred_by`, приглашавшему начисляется +3 дня, и он получает
+персональное уведомление «🎁 Бонус за приглашение».
 
 ### `remove` (POST)
 **Параметры:** `username`. Снимает подписку и отвязывает устройство.

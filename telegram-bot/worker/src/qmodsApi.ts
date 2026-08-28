@@ -90,8 +90,14 @@ export class QmodsUserApi {
    * account. See handlers/register.ts. mod/api/bot.php's `register` action
    * links telegram_id immediately, no site password involved.
    */
-  register(telegramId: string, username: string) {
-    return callApi<{ username?: string; trial?: boolean }>(this.url, this.token, 'register', { telegram_id: telegramId, username }, 'POST');
+  register(telegramId: string, username: string, ref?: string) {
+    return callApi<{ username?: string; trial?: boolean }>(
+      this.url,
+      this.token,
+      'register',
+      { telegram_id: telegramId, username, ref },
+      'POST'
+    );
   }
 
   devices(telegramId: string) {

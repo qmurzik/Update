@@ -29,8 +29,31 @@ export async function startRegister(ctx: Ctx): Promise<void> {
   await reply(ctx, text, registerStartKeyboard());
 }
 
+/**
+ * `t.me/qmods_bot?start=ref_<CODE>` — a bot-native referral link (see
+ * mod/api/bot.php `me`'s ref_link, generated from `bot_make_ref_code()`).
+ * Carries the code straight into `register_username`'s FSM payload so it
+ * survives until the username is actually submitted, then gets applied in
+ * `register` (see handleRegisterUsernameInput below) — no separate storage
+ * needed since the whole funnel is one linear conversation.
+ */
+export async function startWithReferral(ctx: Ctx, refCode: string): Promise<void> {
+  const me = await ctx.api.me(ctx.telegramId);
+  if (me.linked) {
+    await showMainMenu(ctx, `Аккаунт уже привязан: <b>${esc(me.user?.username ?? '')}</b>.`);
+    return;
+  }
+
+  await setState(ctx.env, ctx.chatId, 'register_username', { ref: refCode });
+  const text =
+    '<b>🎁 Вас пригласили в QMods</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
+    'Придумайте никнейм (3–20 символов: латиница, цифры, _ и -) и пришлите его одним сообщением — заведу аккаунт и учту приглашение, сайт не понадобится.';
+
+  await reply(ctx, text, registerStartKeyboard());
+}
+
 /** Handles a plain-text message while the chat is awaiting a username. */
-export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promise<void> {
+export async function handleRegisterUsernameInput(ctx: Ctx, text: string, refCode = ''): Promise<void> {
   const allowed = await checkRateLimit(ctx.env, `register:${ctx.chatId}`, REGISTER_RATE_MAX, REGISTER_RATE_WINDOW);
   if (!allowed) {
     await clearState(ctx.env, ctx.chatId);
@@ -44,7 +67,7 @@ export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promi
     return;
   }
 
-  const result = await ctx.api.register(ctx.telegramId, username);
+  const result = await ctx.api.register(ctx.telegramId, username, refCode || undefined);
 
   if (result.success) {
     await clearState(ctx.env, ctx.chatId);
