@@ -344,6 +344,30 @@ function set_site_auth_gate(bool $enabled): void
 }
 
 /**
+ * Экран "вход/регистрация переехали в бота" — печатает страницу и
+ * завершает запрос. Вызывать из login.php/register.php ТОЛЬКО когда
+ * $device_id === '' (обычный браузерный визит) — device_id-флоу
+ * приложения (автологин, привязка нового устройства формой логина) этот
+ * гейт не должен трогать вообще, у него нет отношения к миграции
+ * веб-кабинета в бота. См. INTEGRATION.md "Выключатель входа/регистрации
+ * на сайте". Не зависит от render_header()/style.css — та же самокрутка
+ * инлайн-CSS, что уже использует login.php для page_block()/page_error()/
+ * page_update(), чтобы не гадать про незнакомую вёрстку site css.
+ */
+function render_site_auth_gate_block(): void
+{
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<style>body{margin:0;background:#050508;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}'
+        . '.b{text-align:center;padding:24px;max-width:420px}.i{font-size:56px}.t{font-size:18px;font-weight:700;margin:12px 0}'
+        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:#3157ff;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
+        . '</head><body><div class="b"><div class="i">🤖</div><div class="t">Вход и регистрация переехали в Telegram</div>'
+        . '<div class="d">Мы переносим управление аккаунтом в Telegram-бота QMods — подписка, устройства, оплата и уведомления там же, без пароля от сайта.</div>'
+        . '<a href="https://t.me/qmods_bot">Открыть @qmods_bot</a></div></body></html>';
+    exit;
+}
+
+/**
  * Админский алерт "кто/когда/что купил" — отдельная очередь от персональных
  * уведомлений пользователя (data/admin_payment_alerts.json, не
  * notifications.json), т.к. это НЕ предназначено для получателя-покупателя:
