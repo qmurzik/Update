@@ -161,7 +161,7 @@ export class QmodsUserApi {
   }
 
   appRelease() {
-    return callApi<{ version: string; changelog: string; has_file: boolean; download_url: string | null; cabinet_url: string }>(
+    return callApi<{ version: string; changelog: string; has_file: boolean; apk_size: number; download_url: string | null; cabinet_url: string }>(
       this.url,
       this.token,
       'app_release'
@@ -321,4 +321,59 @@ export class QmodsAdminApi {
   setSiteAuthGate(enabled: boolean) {
     return callApi<{ enabled: boolean }>(this.url, this.token, 'set_site_auth_gate', { enabled: enabled ? 1 : 0 }, 'POST');
   }
+
+  /** Version/changelog/APK/share-link status — mirrors the site's admin/app.php panel. See handlers/admin.ts showAppManager. */
+  getAppRelease() {
+    return callApi<{
+      version: string;
+      changelog: string;
+      has_file: boolean;
+      apk_size: number;
+      share_enabled: boolean;
+      download_url: string | null;
+    }>(this.url, this.token, 'get_app_release');
+  }
+
+  setAppRelease(version: string, changelog: string) {
+    return callApi(this.url, this.token, 'set_app_release', { version, changelog }, 'POST');
+  }
+
+  /** (Re)generates the public APK download token — any previous link stops working immediately. */
+  generateApkShareLink() {
+    return callApi<{ download_url: string }>(this.url, this.token, 'generate_apk_share_link', {}, 'POST');
+  }
+
+  revokeApkShareLink() {
+    return callApi(this.url, this.token, 'revoke_apk_share_link', {}, 'POST');
+  }
+}
+
+/**
+ * Uploads raw APK bytes straight from a Telegram document to
+ * mod/admin/bot.php's apk_upload action — NOT through callApi() above,
+ * since that helper always JSON-encodes the request body. Here the body
+ * IS the file, so `action` travels in the query string instead (see the
+ * PHP action's own comment for why). See handlers/admin.ts handleApkDocument.
+ */
+export async function uploadApkBinary(
+  env: Env,
+  bytes: ArrayBuffer,
+  filename: string
+): Promise<{ success: boolean; error?: string; size?: number; sha256?: string }> {
+  const url = `${env.QMODS_API_BASE}/mod/admin/bot.php?action=apk_upload`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-QMods-Bot-Token': env.QMODS_ADMIN_BOT_API_TOKEN,
+      'Content-Type': 'application/octet-stream',
+      'X-Apk-Filename': encodeURIComponent(filename).slice(0, 500),
+    },
+    body: bytes,
+  });
+  return (await res.json().catch(() => ({ success: false, error: 'Invalid JSON response' }))) as {
+    success: boolean;
+    error?: string;
+    size?: number;
+    sha256?: string;
+  };
 }

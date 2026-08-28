@@ -765,6 +765,7 @@ if ($action === 'referrals') {
 if ($action === 'app_release') {
     $releaseFile = DATA_DIR . '/app_release.json';
     $shareFile = DATA_DIR . '/download_link.json';
+    $apkFile = APP_ROOT . '/downloads/app.apk';
 
     $release = is_file($releaseFile) ? json_decode((string)file_get_contents($releaseFile), true) : null;
     if (!is_array($release)) $release = [];
@@ -780,6 +781,7 @@ if ($action === 'app_release') {
         'version' => (string)($release['version'] ?? ''),
         'changelog' => (string)($release['changelog'] ?? ''),
         'has_file' => !empty($release['has_file']),
+        'apk_size' => (is_file($apkFile) && filesize($apkFile) > 0) ? (int)filesize($apkFile) : 0,
         'download_url' => $downloadUrl,
         // Без публичной share-ссылки скачивание требует активной сессии на
         // сайте (обычный логин) — бот не может её подделать, поэтому в

@@ -115,9 +115,12 @@ form-data или query-string (объединяются, JSON-тело имее�
 `data/app_release.json`. `download_url` присутствует только если публичная
 ссылка (`data/download_link.json`) включена — иначе бот отправляет на
 `cabinet_url` (требует обычного логина на сайте, бот не может передать
-Telegram-сессию как cookie-сессию сайта).
+Telegram-сессию как cookie-сессию сайта). `apk_size` *(новое)* — размер
+файла в байтах, 0 если файла нет; используется «красивой» страницей
+скачивания (`${PUBLIC_URL}/app/download`, см. README «Публикация APK из
+бота»).
 ```json
-{"success": true, "version": "2.3", "changelog": "…", "has_file": true, "download_url": null, "cabinet_url": "https://qmods.ru/mod/download.php"}
+{"success": true, "version": "2.3", "changelog": "…", "has_file": true, "apk_size": 41943040, "download_url": null, "cabinet_url": "https://qmods.ru/mod/download.php"}
 ```
 
 ### `review`
@@ -255,6 +258,44 @@ message}`. `min_version_code: 0` = гейт выключен.
 `mod/api/bot.php`) и блокируются экраном `GateActivity` в режиме
 `"update"`, независимо от статуса подписки. Управляется командой бота
 «🚧 Мин. версия приложения» в `/admin`.
+
+### `get_app_release` *(новое)*
+Карточка версии/APK/публичной ссылки для экрана «📦 Приложение» в `/admin`
+(отдельно от пользовательского `app_release` — здесь ещё `apk_size` и
+`share_enabled`, чтобы бот мог показать кнопку «Создать»/«Отключить
+ссылку» без второго запроса).
+```json
+{"success": true, "version": "2.3", "changelog": "…", "has_file": true, "apk_size": 41943040, "share_enabled": true, "download_url": "https://qmods.ru/mod/download.php?share=…"}
+```
+
+### `set_app_release` (POST) *(новое)*
+**Параметры:** `version`, `changelog`. Пишет `data/app_release.json` —
+то же самое, что форма «Что нового» в веб-панели `admin/app.php`, только
+из чата бота (`✏️ Версия и описание` на экране «📦 Приложение»).
+
+### `generate_apk_share_link` (POST) *(новое)*
+Без параметров. (Пере)генерирует токен `data/download_link.json` —
+любая ранее выданная публичная ссылка сразу перестаёт работать (как
+кнопка «Сгенерировать» в `admin/app.php`). 400, если `downloads/app.apk`
+ещё не загружен.
+
+### `revoke_apk_share_link` (POST) *(новое)*
+Без параметров. Удаляет `data/download_link.json` — публичная ссылка
+перестаёт открываться, скачивание снова требует логина на сайте.
+
+### `apk_upload` (POST) *(новое)*
+Тело запроса — **сырые байты APK**, не JSON (поэтому `action` передаётся
+через query-string: `?action=apk_upload`, а не в теле). Заголовок
+`X-Apk-Filename` (опционален) — исходное имя файла, только для лога.
+Проверяет ZIP-заголовок (`PK\x03\x04`/…) и лимит 20 МБ (тот же потолок,
+что у Telegram Bot API на скачивание файлов ботом — сюда попадают только
+файлы, которые Worker уже смог скачать), атомарно заменяет
+`downloads/app.apk`. Используется исключительно
+`worker/src/handlers/admin.ts handleApkDocument` — не вызывается напрямую
+с сайта, для этого есть отдельная веб-форма в `admin/app.php`.
+```json
+{"success": true, "size": 8912345, "sha256": "…"}
+```
 
 ### `pending_payment_alerts` *(новое)*
 **Параметры:** `limit` (1–500, по умолчанию 100).

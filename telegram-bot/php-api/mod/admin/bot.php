@@ -549,6 +549,140 @@ if ($action === 'set_site_auth_gate') {
 }
 
 // ============================================================
+// APP_RELEASE (admin) — карточка версии/APK/публичной ссылки прямо из
+// Telegram-бота — зеркало веб-панели admin/app.php (не заменяет её: файлы
+// больше 20 МБ по-прежнему грузятся через сайт, см. apk_upload ниже и
+// android-client/../README "Публикация APK из бота").
+// ============================================================
+
+if ($action === 'get_app_release') {
+    $releaseFile = DATA_DIR . '/app_release.json';
+    $shareFile = DATA_DIR . '/download_link.json';
+    $apkFile = APP_ROOT . '/downloads/app.apk';
+
+    $release = is_file($releaseFile) ? json_decode((string)file_get_contents($releaseFile), true) : [];
+    if (!is_array($release)) $release = [];
+    $share = is_file($shareFile) ? json_decode((string)file_get_contents($shareFile), true) : null;
+
+    $apkExists = is_file($apkFile) && filesize($apkFile) > 0;
+    $shareEnabled = is_array($share) && !empty($share['enabled']) && !empty($share['token']);
+
+    bot_json([
+        'success' => true,
+        'version' => (string)($release['version'] ?? ''),
+        'changelog' => (string)($release['changelog'] ?? ''),
+        'has_file' => $apkExists,
+        'apk_size' => $apkExists ? (int)filesize($apkFile) : 0,
+        'share_enabled' => $shareEnabled,
+        'download_url' => $shareEnabled ? ('https://qmods.ru/mod/download.php?share=' . urlencode((string)$share['token'])) : null,
+    ]);
+}
+
+if ($action === 'set_app_release') {
+    need_post();
+    $version = req_string($request, 'version');
+    $changelog = req_string($request, 'changelog');
+    if ($version === '') {
+        bot_json(['success' => false, 'error' => 'Укажите версию'], 400);
+    }
+
+    $releaseFile = DATA_DIR . '/app_release.json';
+    $apkFile = APP_ROOT . '/downloads/app.apk';
+    $data = [
+        'version' => $version,
+        'changelog' => $changelog,
+        'updated_at' => time(),
+        'has_file' => is_file($apkFile) && filesize($apkFile) > 0,
+    ];
+    file_put_contents($releaseFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    log_action("Telegram admin: app release updated to v{$version}");
+    bot_json(['success' => true]);
+}
+
+if ($action === 'generate_apk_share_link') {
+    need_post();
+    $apkFile = APP_ROOT . '/downloads/app.apk';
+    if (!is_file($apkFile) || filesize($apkFile) <= 0) {
+        bot_json(['success' => false, 'error' => 'Сначала загрузите APK'], 400);
+    }
+    $token = bin2hex(random_bytes(32));
+    $shareFile = DATA_DIR . '/download_link.json';
+    file_put_contents(
+        $shareFile,
+        json_encode(['token' => $token, 'enabled' => true, 'created_at' => time()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        LOCK_EX
+    );
+    log_action('Telegram admin: public APK download link generated');
+    bot_json(['success' => true, 'download_url' => 'https://qmods.ru/mod/download.php?share=' . urlencode($token)]);
+}
+
+if ($action === 'revoke_apk_share_link') {
+    need_post();
+    $shareFile = DATA_DIR . '/download_link.json';
+    if (is_file($shareFile)) @unlink($shareFile);
+    log_action('Telegram admin: public APK download link revoked');
+    bot_json(['success' => true]);
+}
+
+// ============================================================
+// APK_UPLOAD — приём файла APK, отправленного администратором боту как
+// документ (см. worker/src/handlers/admin.ts handleApkDocument). Тело
+// запроса — СЫРЫЕ байты APK, а не JSON, поэтому action передаётся через
+// query-string (?action=apk_upload), а не через тело; авторизация — тот же
+// заголовок X-QMods-Bot-Token, что и у всех остальных действий этого файла.
+//
+// Ограничение 20 МБ — не наша прихоть, а потолок Bot API на скачивание
+// файлов ботом (getFile); Worker уже отсекает более крупные файлы до
+// отправки сюда, эта проверка — просто defense in depth.
+// ============================================================
+
+if ($action === 'apk_upload') {
+    need_post();
+
+    $downloadDir = APP_ROOT . '/downloads';
+    if (!is_dir($downloadDir)) @mkdir($downloadDir, 0755, true);
+
+    $bytes = $raw; // сырое тело запроса, уже прочитанное выше в $raw
+    $size = strlen($bytes);
+    if ($size <= 0) {
+        bot_json(['success' => false, 'error' => 'Пустое тело запроса'], 400);
+    }
+    if ($size > 20 * 1024 * 1024) {
+        bot_json(['success' => false, 'error' => 'Файл больше 20 МБ'], 413);
+    }
+
+    $magic = substr($bytes, 0, 4);
+    if ($magic !== "PK\x03\x04" && $magic !== "PK\x05\x06" && $magic !== "PK\x07\x08") {
+        bot_json(['success' => false, 'error' => 'Файл не похож на настоящий APK (ZIP-заголовок не найден)'], 400);
+    }
+
+    $target = $downloadDir . '/app.apk';
+    $tempTarget = $downloadDir . '/.app-upload-' . bin2hex(random_bytes(10)) . '.tmp';
+    if (@file_put_contents($tempTarget, $bytes, LOCK_EX) === false) {
+        @unlink($tempTarget);
+        bot_json(['success' => false, 'error' => 'Не удалось сохранить APK на сервере'], 500);
+    }
+    // Атомарная замена: текущий опубликованный APK остаётся доступен, пока новый не записан целиком.
+    if (!@rename($tempTarget, $target)) {
+        @unlink($tempTarget);
+        bot_json(['success' => false, 'error' => 'Не удалось заменить текущий APK'], 500);
+    }
+
+    $sha256 = @hash_file('sha256', $target) ?: '';
+    $sizeStored = (int)@filesize($target);
+    $filename = trim((string)($_SERVER['HTTP_X_APK_FILENAME'] ?? ''));
+    log_action('APK uploaded via bot' . ($filename !== '' ? ': ' . $filename : '') . ' (' . $sizeStored . ' bytes)');
+
+    $releaseFile = DATA_DIR . '/app_release.json';
+    $release = is_file($releaseFile) ? json_decode((string)file_get_contents($releaseFile), true) : [];
+    if (!is_array($release)) $release = [];
+    $release['has_file'] = true;
+    file_put_contents($releaseFile, json_encode($release, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+
+    bot_json(['success' => true, 'size' => $sizeStored, 'sha256' => $sha256]);
+}
+
+// ============================================================
 // PENDING_PAYMENT_ALERTS — "кто/когда/что купил" для админа (cron воркера)
 // ============================================================
 

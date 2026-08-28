@@ -122,9 +122,34 @@ export const adminMenuKeyboard = (): InlineKeyboard => [
     { text: '📣 Рассылка всем', callback_data: 'adm:broadcast' },
   ],
   [{ text: '🚧 Мин. версия приложения', callback_data: 'adm:appver' }],
+  [{ text: '📦 Приложение (APK)', callback_data: 'adm:app' }],
   [{ text: '🌐 Вход/регистрация на сайте', callback_data: 'adm:siteauth' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
+
+/**
+ * "📦 Приложение (APK)" screen — publish a new build straight from the bot
+ * (small files) or from the site's drag-and-drop uploader (large ones), then
+ * generate the pretty public landing page. See handlers/admin.ts showAppManager.
+ */
+export const appManagerKeyboard = (release: { has_file: boolean; share_enabled: boolean }, publicUrl: string): InlineKeyboard => {
+  const kb: InlineKeyboard = [
+    [{ text: '✏️ Версия и описание', callback_data: 'adm:app:release' }],
+    [{ text: '📤 Загрузить APK через бота', callback_data: 'adm:app:upload' }],
+  ];
+  if (release.has_file) {
+    kb.push([
+      release.share_enabled
+        ? { text: '🚫 Отключить публичную ссылку', callback_data: 'adm:app:revoke' }
+        : { text: '🔗 Создать публичную ссылку', callback_data: 'adm:app:share' },
+    ]);
+  }
+  if (release.share_enabled && publicUrl) {
+    kb.push([{ text: '🌐 Открыть красивую страницу', url: `${publicUrl}/app/download` }]);
+  }
+  kb.push([{ text: '‹ В админ-меню', callback_data: 'adm:menu' }]);
+  return kb;
+};
 
 /** Toggle screen for get_site_auth_gate/set_site_auth_gate — see handlers/admin.ts showSiteAuthGate. */
 export const siteAuthGateKeyboard = (enabled: boolean): InlineKeyboard => [

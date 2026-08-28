@@ -3,6 +3,7 @@ import {
   adminMenuKeyboard,
   adminUserCardKeyboard,
   adminUsersListKeyboard,
+  appManagerKeyboard,
   cancelKeyboard,
   confirmKeyboard,
   siteAuthGateKeyboard,
@@ -11,7 +12,17 @@ import { DIVIDER, esc, splitTitleBody } from '../util';
 import { isAdmin } from '../config';
 import { clearState, getState, logAdminAction, setState } from '../db';
 import type { AdminUserCard, AdminUserSummary } from '../qmodsApi';
+import { uploadApkBinary } from '../qmodsApi';
+import type { TgDocument } from '../telegram/types';
 import { reply } from './reply';
+
+const APK_BOT_UPLOAD_LIMIT = 20 * 1024 * 1024; // Bot API's hard cap on getFile downloads, not our choice.
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
 
 const USERS_PAGE_SIZE = 8;
 
@@ -321,4 +332,139 @@ export async function toggleSiteAuthGate(ctx: Ctx, enabled: boolean): Promise<vo
   const res = await ctx.adminApi.setSiteAuthGate(enabled);
   await logAdminAction(ctx.env, ctx.telegramId, 'set_site_auth_gate', { enabled, success: res.success });
   await showSiteAuthGate(ctx);
+}
+
+/**
+ * "📦 Приложение (APK)" — publish a new build straight from the chat, and
+ * generate the "pretty" public landing page (`${PUBLIC_URL}/app/download`,
+ * see index.ts and webapp/downloadPage.ts). That URL never changes between
+ * releases — only the underlying share token it points at does — so it's
+ * safe to pin anywhere (channel description, pinned message) once.
+ *
+ * Telegram's Bot API caps file downloads (getFile) at 20MB regardless of
+ * account type, so a real APK often can't come through the bot at all —
+ * for those, admin/app.php's existing drag-and-drop uploader on the site
+ * still does the heavy lifting; this screen just picks up its result
+ * (has_file/apk_size) and handles version/changelog + the share link either way.
+ */
+export async function showAppManager(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  await clearState(ctx.env, ctx.chatId);
+  const res = await ctx.adminApi.getAppRelease();
+
+  const lines = ['<b>📦 Приложение QMods</b>', DIVIDER, ''];
+  lines.push(`Версия: <b>${esc(res.version || '—')}</b>`);
+  lines.push(`APK: ${res.has_file ? `✅ загружен (${fmtBytes(res.apk_size)})` : '⛔ не загружен'}`);
+  lines.push(`Публичная ссылка: ${res.share_enabled ? '🟢 активна' : '🔴 выключена'}`);
+  if (res.changelog) lines.push('', '<b>Что нового:</b>', esc(res.changelog));
+  lines.push(
+    '',
+    `Через бота можно загрузить APK до 20 МБ (ограничение Telegram). Файл больше — загрузите через <a href="https://qmods.ru/admin/app.php">веб-панель сайта</a>, потом просто откройте этот экран ещё раз — карточка обновится сама.`
+  );
+
+  await reply(ctx, lines.join('\n'), appManagerKeyboard(res, ctx.env.PUBLIC_URL));
+}
+
+export async function askReleaseInfo(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  await setState(ctx.env, ctx.chatId, 'admin_release_text');
+  await reply(
+    ctx,
+    'Введите версию первой строкой (например 2.4.1), а со второй строки — список изменений (по желанию).',
+    cancelKeyboard('adm:app')
+  );
+}
+
+export async function handleReleaseInfoInput(ctx: Ctx, text: string): Promise<void> {
+  const { title: version, body: changelog } = splitTitleBody(text);
+  if (!version) {
+    await reply(ctx, 'Первая строка должна быть номером версии.', cancelKeyboard('adm:app'));
+    return;
+  }
+
+  const res = await ctx.adminApi.setAppRelease(version, changelog);
+  await logAdminAction(ctx.env, ctx.telegramId, 'set_app_release', { version, success: res.success });
+  await clearState(ctx.env, ctx.chatId);
+  if (!res.success) {
+    await reply(ctx, `❌ ${esc(String(res.error ?? 'Ошибка'))}`, cancelKeyboard('adm:app'));
+    return;
+  }
+  await showAppManager(ctx);
+}
+
+export async function askApkUpload(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  await setState(ctx.env, ctx.chatId, 'admin_apk_upload_wait');
+  await reply(
+    ctx,
+    'Пришлите файл <b>.apk</b> в этот чат как документ (не фото).\n\nОграничение Telegram — 20 МБ на файл, который бот может скачать. Если ваша сборка больше, загрузите её через <a href="https://qmods.ru/admin/app.php">веб-панель сайта</a> и вернитесь на экран «📦 Приложение» — карточка подхватит её сама.',
+    cancelKeyboard('adm:app')
+  );
+}
+
+export async function handleApkDocument(ctx: Ctx, document: TgDocument): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+
+  const name = document.file_name ?? '';
+  const looksLikeApk = /\.apk$/i.test(name) || document.mime_type === 'application/vnd.android.package-archive';
+  if (!looksLikeApk) {
+    await reply(ctx, 'Это не похоже на .apk файл. Пришлите APK-файл документом.', cancelKeyboard('adm:app'));
+    return;
+  }
+
+  const size = document.file_size ?? 0;
+  if (size > APK_BOT_UPLOAD_LIMIT) {
+    await clearState(ctx.env, ctx.chatId);
+    await reply(
+      ctx,
+      `Файл весит ${fmtBytes(size)} — Telegram не даёт боту скачать больше 20 МБ. Загрузите его через <a href="https://qmods.ru/admin/app.php">веб-панель сайта</a>, потом откройте «📦 Приложение» ещё раз.`,
+      cancelKeyboard('adm:app')
+    );
+    return;
+  }
+
+  await clearState(ctx.env, ctx.chatId);
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await ctx.tg.downloadFile(document.file_id);
+  } catch (err) {
+    console.error('handleApkDocument: downloadFile failed', err);
+    await reply(ctx, '❌ Не удалось скачать файл из Telegram. Попробуйте ещё раз.', cancelKeyboard('adm:app'));
+    return;
+  }
+
+  const res = await uploadApkBinary(ctx.env, bytes, name || 'app.apk');
+  await logAdminAction(ctx.env, ctx.telegramId, 'apk_upload', { filename: name, size: bytes.byteLength, success: res.success });
+  if (!res.success) {
+    await reply(ctx, `❌ ${esc(res.error ?? 'Не удалось сохранить APK на сервере.')}`, cancelKeyboard('adm:app'));
+    return;
+  }
+
+  if (ctx.incomingMessageId) {
+    await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '🎉').catch(() => undefined);
+  }
+  await reply(
+    ctx,
+    `✅ APK загружен: ${fmtBytes(res.size ?? bytes.byteLength)}${res.sha256 ? `\nSHA-256: <code>${esc(res.sha256.slice(0, 16))}…</code>` : ''}\n\nТеперь создайте публичную ссылку, если её ещё нет.`,
+    cancelKeyboard('adm:app')
+  );
+  await showAppManager(ctx);
+}
+
+export async function generateApkShareLink(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  const res = await ctx.adminApi.generateApkShareLink();
+  await logAdminAction(ctx.env, ctx.telegramId, 'generate_apk_share_link', { success: res.success });
+  if (!res.success) {
+    await reply(ctx, `❌ ${esc(String(res.error ?? 'Ошибка'))}`, cancelKeyboard('adm:app'));
+    return;
+  }
+  await showAppManager(ctx);
+}
+
+export async function revokeApkShareLink(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  const res = await ctx.adminApi.revokeApkShareLink();
+  await logAdminAction(ctx.env, ctx.telegramId, 'revoke_apk_share_link', { success: res.success });
+  await showAppManager(ctx);
 }

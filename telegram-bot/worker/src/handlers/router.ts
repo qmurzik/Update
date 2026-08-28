@@ -22,20 +22,27 @@ import { showAppRelease } from './app';
 import { handleReviewText, pickStar, showReview } from './reviews';
 import {
   askAppVersion,
+  askApkUpload,
   askBroadcast,
   askDelete,
   askIssue,
   askMessage,
+  askReleaseInfo,
   askRemove,
   askSearch,
   confirmDelete,
   confirmRemove,
+  generateApkShareLink,
+  handleApkDocument,
   handleAppVersionInput,
   handleBroadcastInput,
   handleIssueInput,
   handleMessageInput,
+  handleReleaseInfoInput,
   handleSearchInput,
+  revokeApkShareLink,
   showAdminMenu,
+  showAppManager,
   showCurrentCard,
   showSiteAuthGate,
   showStats,
@@ -43,6 +50,7 @@ import {
   toggleSiteAuthGate,
 } from './admin';
 import { reply } from './reply';
+import { cancelKeyboard } from '../telegram/keyboards';
 
 const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Promise<void>> = {
   'm:main': (ctx) => showMainMenu(ctx),
@@ -79,6 +87,11 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'adm:appver': askAppVersion,
   'adm:siteauth': showSiteAuthGate,
   'adm:card': showCurrentCard,
+  'adm:app': showAppManager,
+  'adm:app:release': askReleaseInfo,
+  'adm:app:upload': askApkUpload,
+  'adm:app:share': generateApkShareLink,
+  'adm:app:revoke': revokeApkShareLink,
 };
 
 /**
@@ -127,7 +140,15 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
 
 // Text-input states only reachable from an admin flow — double-checked here
 // in case D1 state ever outlives an admin's access being revoked.
-const ADMIN_STATES = new Set(['admin_search', 'admin_issue_days', 'admin_msg_text', 'admin_broadcast_text', 'admin_app_version_text']);
+const ADMIN_STATES = new Set([
+  'admin_search',
+  'admin_issue_days',
+  'admin_msg_text',
+  'admin_broadcast_text',
+  'admin_app_version_text',
+  'admin_release_text',
+  'admin_apk_upload_wait',
+]);
 
 export async function handleUpdate(update: TgUpdate, env: Env): Promise<void> {
   const from = update.message?.from ?? update.callback_query?.from;
@@ -147,8 +168,30 @@ export async function handleUpdate(update: TgUpdate, env: Env): Promise<void> {
     });
     return;
   }
+  if (update.message?.document) {
+    await handleDocument(update, env);
+    return;
+  }
   if (update.message?.text) {
     await handleMessage(update, env);
+  }
+}
+
+/** Only reachable meaningfully via the admin "📤 Загрузить APK через бота" flow — see handlers/admin.ts handleApkDocument. */
+async function handleDocument(update: TgUpdate, env: Env): Promise<void> {
+  const msg = update.message!;
+  const chatId = msg.chat.id;
+  const telegramId = String(msg.from?.id ?? chatId);
+  const ctx = buildCtx(env, chatId, telegramId, { incomingMessageId: msg.message_id });
+
+  try {
+    const state = await getState(env, chatId);
+    if (state?.awaiting !== 'admin_apk_upload_wait' || !isAdmin(env, telegramId)) return;
+    await handleApkDocument(ctx, msg.document!);
+  } catch (err) {
+    console.error('document handler failed', err);
+    await reportError(env, err, 'document upload');
+    await reply(ctx, '⚠️ Что-то пошло не так на нашей стороне. Мы уже в курсе — попробуйте ещё раз через минуту.').catch(() => undefined);
   }
 }
 
@@ -248,6 +291,10 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
       return handleBroadcastInput(ctx, text);
     case 'admin_app_version_text':
       return handleAppVersionInput(ctx, text);
+    case 'admin_release_text':
+      return handleReleaseInfoInput(ctx, text);
+    case 'admin_apk_upload_wait':
+      return reply(ctx, 'Пришлите файл .apk документом (не текстом).', cancelKeyboard('adm:app'));
     case 'review_text':
       return handleReviewText(ctx, Number(state.payload.rating ?? 0), text);
     default:

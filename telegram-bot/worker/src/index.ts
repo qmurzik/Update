@@ -20,6 +20,7 @@ import type { PaymentOrderRow } from './db';
 import type { InlineKeyboard, TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
+import { renderDownloadPage } from './webapp/downloadPage';
 import { parseNotification, verifyNotificationSignature } from './yoomoney';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -120,6 +121,25 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
   }
   if (url.pathname === '/app/api') {
     return handleWebAppApi(request, env);
+  }
+
+  // The "pretty" public APK download page — a stable URL admins generate
+  // from the bot's "📦 Приложение" screen (handlers/admin.ts showAppManager)
+  // instead of sharing the raw qmods.ru/mod/download.php?share=... link
+  // directly. Always reflects the CURRENT release; the underlying share
+  // token can rotate without this URL ever changing.
+  if (url.pathname === '/app/download' && request.method === 'GET') {
+    const api = new QmodsUserApi(env);
+    const res = await api.appRelease();
+    const html = renderDownloadPage({
+      version: res.version ?? '',
+      changelog: res.changelog ?? '',
+      downloadUrl: res.download_url ?? null,
+      apkSize: res.apk_size ?? 0,
+      kiraImage: kiraImage(env, 'kira-success.webp'),
+      cabinetUrl: res.cabinet_url ?? env.QMODS_CABINET_URL,
+    });
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
   // One-off: registers the "/" command menu (default + a richer one for

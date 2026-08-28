@@ -7,9 +7,11 @@ import type { BotCommandScope, InlineKeyboard, InlineQueryResultArticle } from '
  */
 export class TelegramClient {
   private readonly base: string;
+  private readonly token: string;
 
   constructor(env: Env) {
-    this.base = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
+    this.token = env.TELEGRAM_BOT_TOKEN;
+    this.base = `https://api.telegram.org/bot${this.token}`;
   }
 
   private async call<T = unknown>(method: string, params: Record<string, unknown>): Promise<T> {
@@ -135,5 +137,20 @@ export class TelegramClient {
     await this.call('setMyName', { name });
     await this.call('setMyDescription', { description });
     await this.call('setMyShortDescription', { short_description: shortDescription });
+  }
+
+  /**
+   * Downloads a file the bot received (e.g. an admin-uploaded APK document
+   * — see handlers/admin.ts handleApkDocument). The Bot API caps file
+   * downloads at 20MB regardless of account type; callers must check
+   * `message.document.file_size` BEFORE calling this, since a too-large
+   * file_id makes getFile itself fail rather than truncate.
+   */
+  async downloadFile(fileId: string): Promise<ArrayBuffer> {
+    const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId });
+    if (!info.file_path) throw new Error('Telegram getFile returned no file_path');
+    const res = await fetch(`https://api.telegram.org/file/bot${this.token}/${info.file_path}`);
+    if (!res.ok) throw new Error(`Telegram file download failed: ${res.status}`);
+    return res.arrayBuffer();
   }
 }

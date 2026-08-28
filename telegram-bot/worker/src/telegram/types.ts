@@ -13,11 +13,20 @@ export interface TgChat {
   type: string;
 }
 
+/** https://core.telegram.org/bots/api#document — only the fields the admin APK-upload flow needs. */
+export interface TgDocument {
+  file_id: string;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
+}
+
 export interface TgMessage {
   message_id: number;
   from?: TgUser;
   chat: TgChat;
   text?: string;
+  document?: TgDocument;
   date: number;
 }
 
