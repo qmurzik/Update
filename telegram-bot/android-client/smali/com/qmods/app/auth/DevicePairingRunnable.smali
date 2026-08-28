@@ -12,16 +12,24 @@
 
 .field private final handler:Landroid/os/Handler;
 
-.method public constructor <init>(Landroid/content/Context;Lcom/qmods/app/auth/PairingCallback;)V
+# Null/empty = classic flow (open the devicelink_ deep link in Telegram).
+# Non-empty = "no Telegram on this phone" flow — notify this Telegram
+# @username instead of opening a link, see DevicePairing.startPairingByUsername().
+.field private final username:Ljava/lang/String;
+
+.method public constructor <init>(Landroid/content/Context;Lcom/qmods/app/auth/PairingCallback;Ljava/lang/String;)V
     .locals 2
     .param p1, "context"    # Landroid/content/Context;
     .param p2, "callback"    # Lcom/qmods/app/auth/PairingCallback;
+    .param p3, "username"    # Ljava/lang/String;
 
     invoke-direct {p0}, Ljava/lang/Object;-><init>()V
 
     iput-object p1, p0, Lcom/qmods/app/auth/DevicePairingRunnable;->context:Landroid/content/Context;
 
     iput-object p2, p0, Lcom/qmods/app/auth/DevicePairingRunnable;->callback:Lcom/qmods/app/auth/PairingCallback;
+
+    iput-object p3, p0, Lcom/qmods/app/auth/DevicePairingRunnable;->username:Ljava/lang/String;
 
     new-instance v0, Landroid/os/Handler;
 
@@ -99,7 +107,110 @@
 
     invoke-direct {p0, v8, v9}, Lcom/qmods/app/auth/DevicePairingRunnable;->postCodeReady(Ljava/lang/String;Ljava/lang/String;)V
 
+    iget-object v1, p0, Lcom/qmods/app/auth/DevicePairingRunnable;->username:Ljava/lang/String;
+
+    if-eqz v1, :classic_flow
+
+    invoke-virtual {v1}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v2
+
+    if-nez v2, :classic_flow
+
+    # "No Telegram on this phone" flow — ask the server to notify this
+    # @username instead of opening a deep link. Any exception here (bad
+    # username encoding, network) falls through to :catch_start_failed
+    # below, same as a classic-flow failure — only a parsed {success:false}
+    # response gets its own specific reason via postFailed.
+    new-instance v2, Ljava/lang/StringBuilder;
+
+    invoke-direct {v2}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v3, "https://update.qmurzik7.workers.dev/device/pair/notify-username?code="
+
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    invoke-virtual {v2, v8}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    const-string v3, "&username="
+
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    const-string v3, "UTF-8"
+
+    invoke-static {v1, v3}, Ljava/net/URLEncoder;->encode(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    invoke-virtual {v2, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    const-string v3, "&device="
+
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    sget-object v4, Landroid/os/Build;->MODEL:Ljava/lang/String;
+
+    const-string v3, "UTF-8"
+
+    invoke-static {v4, v3}, Ljava/net/URLEncoder;->encode(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    invoke-virtual {v2, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v2
+
+    invoke-virtual {v2}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    move-result-object v3
+
+    invoke-static {v3}, Lcom/qmods/app/auth/Http;->post(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    new-instance v5, Lorg/json/JSONObject;
+
+    invoke-direct {v5, v4}, Lorg/json/JSONObject;-><init>(Ljava/lang/String;)V
+
+    const-string v3, "success"
+
+    const/4 v6, 0x0
+
+    invoke-virtual {v5, v3, v6}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;Z)Z
+
+    move-result v6
+
+    if-nez v6, :username_notify_ok
+
+    const-string v3, "error"
+
+    const-string v6, "telegram_not_started"
+
+    invoke-virtual {v5, v3, v6}, Lorg/json/JSONObject;->optString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v3
+
+    invoke-direct {p0, v3}, Lcom/qmods/app/auth/DevicePairingRunnable;->postFailed(Ljava/lang/String;)V
+
+    return-void
+
+    :username_notify_ok
+    goto :continue_after_start
+
+    :classic_flow
     invoke-direct {p0, v9}, Lcom/qmods/app/auth/DevicePairingRunnable;->openTelegram(Ljava/lang/String;)V
+
+    :continue_after_start
     :try_end
     .catch Ljava/lang/Exception; {:try_start .. :try_end} :catch_start_failed
 

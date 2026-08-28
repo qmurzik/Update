@@ -41,6 +41,14 @@
 
 .field private pulseAlpha:Landroid/animation/ObjectAnimator;
 
+# "No Telegram on this phone" alternative — only visible in mode=="pair"
+# (see hideUsernameSection/showUsernameSection, called from applyMode()).
+.field private usernameSection:Landroid/widget/LinearLayout;
+
+.field private usernameInput:Landroid/widget/EditText;
+
+.field private usernameButton:Landroid/widget/Button;
+
 .method public constructor <init>()V
     .locals 0
 
@@ -457,6 +465,236 @@
 
     invoke-virtual {v0, v1, v3}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
 
+    # --- "no Telegram on this phone" alternative pairing section (hidden by
+    # default; shown only in mode=="pair" — see applyMode()/showUsernameSection) ---
+    new-instance v1, Landroid/widget/LinearLayout;
+
+    invoke-direct {v1, p0}, Landroid/widget/LinearLayout;-><init>(Landroid/content/Context;)V
+
+    iput-object v1, p0, Lcom/qmods/app/auth/GateActivity;->usernameSection:Landroid/widget/LinearLayout;
+
+    const/4 v3, 0x1
+
+    invoke-virtual {v1, v3}, Landroid/widget/LinearLayout;->setOrientation(I)V
+
+    const/16 v3, 0x8    # View.GONE
+
+    invoke-virtual {v1, v3}, Landroid/view/View;->setVisibility(I)V
+
+    # divider label
+    new-instance v3, Landroid/widget/TextView;
+
+    invoke-direct {v3, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
+
+    const-string v5, "или"
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+
+    const/high16 v5, 0x41400000    # 12.0sp
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextSize(F)V
+
+    const v5, 0xff8791a8
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setTextColor(I)V
+
+    const/16 v5, 0x11    # Gravity.CENTER
+
+    invoke-virtual {v3, v5}, Landroid/widget/TextView;->setGravity(I)V
+
+    invoke-virtual {v1, v3}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;)V
+
+    # username input
+    new-instance v3, Landroid/widget/EditText;
+
+    invoke-direct {v3, p0}, Landroid/widget/EditText;-><init>(Landroid/content/Context;)V
+
+    iput-object v3, p0, Lcom/qmods/app/auth/GateActivity;->usernameInput:Landroid/widget/EditText;
+
+    const-string v5, "ваш_telegram_ник"
+
+    invoke-virtual {v3, v5}, Landroid/widget/EditText;->setHint(Ljava/lang/CharSequence;)V
+
+    const v5, 0xffffffff
+
+    invoke-virtual {v3, v5}, Landroid/widget/EditText;->setTextColor(I)V
+
+    const v5, 0xff5f6b85
+
+    invoke-virtual {v3, v5}, Landroid/widget/EditText;->setHintTextColor(I)V
+
+    const/16 v5, 0x11    # Gravity.CENTER
+
+    invoke-virtual {v3, v5}, Landroid/widget/EditText;->setGravity(I)V
+
+    const/4 v5, 0x1
+
+    invoke-virtual {v3, v5}, Landroid/widget/EditText;->setSingleLine(Z)V
+
+    new-instance v5, Landroid/graphics/drawable/GradientDrawable;
+
+    invoke-direct {v5}, Landroid/graphics/drawable/GradientDrawable;-><init>()V
+
+    const v6, 0xff1b2333
+
+    invoke-virtual {v5, v6}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V
+
+    const/high16 v6, 0x41800000    # 16.0dp corner radius
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    int-to-float v6, v6
+
+    invoke-virtual {v5, v6}, Landroid/graphics/drawable/GradientDrawable;->setCornerRadius(F)V
+
+    invoke-virtual {v3, v5}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+
+    const/high16 v6, 0x41400000    # 12.0dp vertical padding
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    const/high16 v7, 0x41800000    # 16.0dp horizontal padding
+
+    invoke-direct {p0, v7}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v7
+
+    invoke-virtual {v3, v7, v6, v7, v6}, Landroid/view/View;->setPadding(IIII)V
+
+    new-instance v5, Landroid/widget/LinearLayout$LayoutParams;
+
+    const/4 v6, -0x1    # MATCH_PARENT
+
+    const/4 v7, -0x2    # WRAP_CONTENT
+
+    invoke-direct {v5, v6, v7}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V
+
+    const/high16 v6, 0x41000000    # 8.0dp top
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    const/4 v7, 0x0
+
+    invoke-virtual {v5, v7, v6, v7, v7}, Landroid/view/ViewGroup$MarginLayoutParams;->setMargins(IIII)V
+
+    invoke-virtual {v1, v3, v5}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+    # username confirm button (outlined style — de-emphasized vs. the primary
+    # filled-gradient "Войти через Telegram" button above)
+    new-instance v3, Landroid/widget/Button;
+
+    invoke-direct {v3, p0}, Landroid/widget/Button;-><init>(Landroid/content/Context;)V
+
+    iput-object v3, p0, Lcom/qmods/app/auth/GateActivity;->usernameButton:Landroid/widget/Button;
+
+    invoke-virtual {v3, p0}, Landroid/widget/Button;->setOnClickListener(Landroid/view/View$OnClickListener;)V
+
+    const/4 v5, 0x0
+
+    invoke-virtual {v3, v5}, Landroid/widget/Button;->setAllCaps(Z)V
+
+    const v5, 0xffffffff
+
+    invoke-virtual {v3, v5}, Landroid/widget/Button;->setTextColor(I)V
+
+    const/high16 v5, 0x41600000    # 14.0sp
+
+    invoke-virtual {v3, v5}, Landroid/widget/Button;->setTextSize(F)V
+
+    const-string v5, "Подтвердить по юзернейму"
+
+    invoke-virtual {v3, v5}, Landroid/widget/Button;->setText(Ljava/lang/CharSequence;)V
+
+    new-instance v5, Landroid/graphics/drawable/GradientDrawable;
+
+    invoke-direct {v5}, Landroid/graphics/drawable/GradientDrawable;-><init>()V
+
+    const/4 v6, 0x0    # transparent fill
+
+    invoke-virtual {v5, v6}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V
+
+    const/high16 v6, 0x40000000    # 2.0dp stroke width
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    const v7, 0xff3157ff
+
+    invoke-virtual {v5, v6, v7}, Landroid/graphics/drawable/GradientDrawable;->setStroke(II)V
+
+    const/high16 v6, 0x41800000    # 16.0dp corner radius
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    int-to-float v6, v6
+
+    invoke-virtual {v5, v6}, Landroid/graphics/drawable/GradientDrawable;->setCornerRadius(F)V
+
+    invoke-virtual {v3, v5}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+
+    const/high16 v6, 0x41800000    # 16.0dp horizontal padding
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    const/high16 v7, 0x41400000    # 12.0dp vertical padding
+
+    invoke-direct {p0, v7}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v7
+
+    invoke-virtual {v3, v6, v7, v6, v7}, Landroid/view/View;->setPadding(IIII)V
+
+    new-instance v5, Landroid/widget/LinearLayout$LayoutParams;
+
+    const/4 v6, -0x1    # MATCH_PARENT
+
+    const/4 v7, -0x2    # WRAP_CONTENT
+
+    invoke-direct {v5, v6, v7}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V
+
+    const/high16 v6, 0x41000000    # 8.0dp top
+
+    invoke-direct {p0, v6}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v6
+
+    const/4 v7, 0x0
+
+    invoke-virtual {v5, v7, v6, v7, v7}, Landroid/view/ViewGroup$MarginLayoutParams;->setMargins(IIII)V
+
+    invoke-virtual {v1, v3, v5}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
+    # add the whole section to root, 12dp top margin separating it from the
+    # primary "Войти через Telegram" button above
+    new-instance v3, Landroid/widget/LinearLayout$LayoutParams;
+
+    const/4 v5, -0x2    # WRAP_CONTENT
+
+    invoke-direct {v3, v5, v5}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V
+
+    const/high16 v5, 0x41400000    # 12.0dp top
+
+    invoke-direct {p0, v5}, Lcom/qmods/app/auth/GateActivity;->dp(F)I
+
+    move-result v5
+
+    const/4 v6, 0x0
+
+    invoke-virtual {v3, v6, v5, v6, v6}, Landroid/view/ViewGroup$MarginLayoutParams;->setMargins(IIII)V
+
+    invoke-virtual {v0, v1, v3}, Landroid/widget/LinearLayout;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+
     invoke-virtual {p0, v0}, Landroid/app/Activity;->setContentView(Landroid/view/View;)V
 
     invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->applyMode()V
@@ -744,6 +982,41 @@
     return-void
 .end method
 
+# Hides the username-pairing alternative (divider + input + button). Called
+# unconditionally at the top of applyMode() so switching to any mode other
+# than "pair" never leaves it visible.
+.method private hideUsernameSection()V
+    .locals 2
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->usernameSection:Landroid/widget/LinearLayout;
+
+    if-eqz v0, :done
+
+    const/16 v1, 0x8    # View.GONE
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+
+    :done
+    return-void
+.end method
+
+# Reveals the username-pairing alternative — called only from applyMode()'s
+# "pair" branch.
+.method private showUsernameSection()V
+    .locals 2
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->usernameSection:Landroid/widget/LinearLayout;
+
+    if-eqz v0, :done
+
+    const/4 v1, 0x0    # View.VISIBLE
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+
+    :done
+    return-void
+.end method
+
 .method protected onDestroy()V
     .locals 0
 
@@ -758,6 +1031,8 @@
     .locals 4
 
     invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->stopPulse()V
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->hideUsernameSection()V
 
     iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
 
@@ -782,6 +1057,8 @@
     invoke-virtual {v2, v3}, Landroid/widget/Button;->setText(Ljava/lang/CharSequence;)V
 
     invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->startPulse()V
+
+    invoke-direct {p0}, Lcom/qmods/app/auth/GateActivity;->showUsernameSection()V
 
     return-void
 
@@ -853,6 +1130,42 @@
     .locals 3
     .param p1, "v"    # Landroid/view/View;
 
+    # "no Telegram on this phone" alternative — see onCreate's usernameSection
+    # block and DevicePairing.startPairingByUsername().
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->usernameButton:Landroid/widget/Button;
+
+    if-ne p1, v0, :not_username_button
+
+    iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->usernameInput:Landroid/widget/EditText;
+
+    invoke-virtual {v0}, Landroid/widget/EditText;->getText()Landroid/text/Editable;
+
+    move-result-object v0
+
+    # Editable is an interface — invoke-virtual must target it via a class
+    # owner (Object), not the interface type, or ART verification fails.
+    invoke-virtual {v0}, Ljava/lang/Object;->toString()Ljava/lang/String;
+
+    move-result-object v0
+
+    invoke-virtual {v0}, Ljava/lang/String;->trim()Ljava/lang/String;
+
+    move-result-object v0
+
+    invoke-virtual {v0}, Ljava/lang/String;->isEmpty()Z
+
+    move-result v1
+
+    if-eqz v1, :do_username_pairing
+
+    return-void
+
+    :do_username_pairing
+    invoke-static {p0, v0, p0}, Lcom/qmods/app/auth/DevicePairing;->startPairingByUsername(Landroid/content/Context;Ljava/lang/String;Lcom/qmods/app/auth/PairingCallback;)V
+
+    return-void
+
+    :not_username_button
     iget-object v0, p0, Lcom/qmods/app/auth/GateActivity;->mode:Ljava/lang/String;
 
     const-string v1, "pair"
@@ -948,9 +1261,35 @@
 
     move-result v0
 
-    if-eqz v0, :other_reason
+    if-eqz v0, :check_not_started
 
     const-string v1, "Время ожидания истекло. Попробуйте снова."
+
+    goto :show
+
+    :check_not_started
+    const-string v0, "telegram_not_started"
+
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :check_declined
+
+    const-string v1, "Этот Telegram-аккаунт ещё не писал боту. Откройте @qmods_bot в Telegram (на любом устройстве) и нажмите Start, затем попробуйте снова."
+
+    goto :show
+
+    :check_declined
+    const-string v0, "declined_by_user"
+
+    invoke-virtual {v0, p1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :other_reason
+
+    const-string v1, "Вход отклонён в Telegram. Если это ошибка — попробуйте снова."
 
     goto :show
 
