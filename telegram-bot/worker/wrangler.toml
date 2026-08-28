@@ -53,4 +53,4 @@ PUBLIC_URL = "https://update.qmurzik7.workers.dev"
 # Номер счёта кошелька ЮMoney (получатель платежей) — см. README «Оплата
 # через ЮMoney». Не секрет (это просто номер счёта), но обязателен для
 # оплаты — без него /pay/* ссылки будут вести на невалидный Quickpay-запрос.
-YOOMONEY_WALLET = "PASTE_YOOMONEY_WALLET_NUMBER_HERE"
+YOOMONEY_WALLET = "4100119562830064"
