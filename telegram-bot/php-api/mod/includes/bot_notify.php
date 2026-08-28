@@ -456,11 +456,31 @@ function render_update_required_block(?array $user = null): void
                 . '#Intent;scheme=tg;package=org.telegram.messenger;S.browser_fallback_url='
                 . rawurlencode($fallbackUrl) . ';end';
 
+            // ЛЮБАЯ ссылка (https, tg://, intent://) — это клик внутри WebView
+            // старого приложения, а его shouldOverrideUrlLoading нам недоступен
+            // (закрытый код старой сборки) — что бы мы туда ни положили, сам
+            // WebView решает, резолвить это в системный intent или тихо
+            // проглотить. На практике так и получилось: ни обычная https-, ни
+            // intent://-ссылка не открывают Telegram на части устройств.
+            //
+            // QR-код — единственный способ полностью обойти эту проблему: тут
+            // вообще нет клика/навигации, это просто <img>, который человек
+            // сканирует камерой телефона или встроенным QR-сканером самого
+            // Telegram (значок QR в поиске / "Добавить" → "Сканировать QR").
+            // Генерируется сторонним сервисом (api.qrserver.com, бесплатный,
+            // без ключа) — в URL уходит только code, живущий 10 минут и годный
+            // ровно на одну привязку этого аккаунта, так что цена утечки
+            // минимальна даже если картинку когда-нибудь закэшируют.
+            $qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=' . rawurlencode($fallbackUrl);
+
             $linkSection =
                 '<div style="margin-top:20px;padding-top:20px;border-top:1px solid #1b2333">'
                 . '<div class="d" style="margin-bottom:12px">Аккаунт <b style="color:#f1f5f9">' . $username . '</b> ещё активен. '
                 . 'Привяжите Telegram сейчас, чтобы не потерять доступ после обновления:</div>'
-                . '<a href="' . htmlspecialchars($intentUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#3157ff">Открыть бота и привязать</a>'
+                . '<div class="d" style="margin-bottom:8px">Ссылки внутри старого приложения открываются не всегда — надёжнее всего отсканировать QR-код камерой телефона или QR-сканером в самом Telegram:</div>'
+                . '<img src="' . htmlspecialchars($qrSrc, ENT_QUOTES, 'UTF-8') . '" width="220" height="220" '
+                . 'style="display:block;margin:0 auto;border-radius:12px;background:#fff;padding:8px" alt="QR-код для привязки Telegram">'
+                . '<a href="' . htmlspecialchars($intentUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#3157ff;margin-top:16px">Или открыть бота ссылкой</a>'
                 . '<div class="d" style="margin-top:10px;font-size:12px">Не открылось? '
                 . '<a href="' . htmlspecialchars($fallbackUrl, ENT_QUOTES, 'UTF-8') . '" style="display:inline;padding:0;background:none;color:#9db4ff;font-weight:400">попробуйте обычную ссылку</a>'
                 . '</div>'
