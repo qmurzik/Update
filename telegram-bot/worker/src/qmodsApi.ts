@@ -248,6 +248,13 @@ export class QmodsAdminApi {
     return callApi(this.url, this.token, 'ack_telegram_push', { items }, 'POST');
   }
 
+  /** "Кто/когда/что купил" alerts queued by notify_admin_payment_event() — see index.ts deliverPendingPaymentAlerts. */
+  pendingPaymentAlerts(limit = 100) {
+    return callApi<{
+      items: Array<{ id: string; username: string; telegram_id: string; plan: string; amount: number; days: number; created_at: number }>;
+    }>(this.url, this.token, 'pending_payment_alerts', { limit });
+  }
+
   /** Current forced-update gate (0 = disabled) — for showing the admin the current value before they change it. */
   getAppVersion() {
     return callApi<{ min_version_code: number; message: string }>(this.url, this.token, 'get_app_version');

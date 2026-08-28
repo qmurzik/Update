@@ -280,3 +280,60 @@ function set_app_version_gate(int $minVersionCode, string $message): void
         'updated_at' => time(),
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
 }
+
+/**
+ * Админский алерт "кто/когда/что купил" — отдельная очередь от персональных
+ * уведомлений пользователя (data/admin_payment_alerts.json, не
+ * notifications.json), т.к. это НЕ предназначено для получателя-покупателя:
+ * не показывается в его кабинете/боте, уходит только в ADMIN_TELEGRAM_IDS
+ * воркера (см. worker/src/index.ts deliverPendingPaymentAlerts). Вызывать
+ * из событий успешной оплаты — см. INTEGRATION.md "Алерт админу об оплате".
+ */
+function notify_admin_payment_event(string $usernameLower, string $planTitle, float $amount, int $days = 0): void
+{
+    $usernameLower = strtolower(trim($usernameLower));
+    if ($usernameLower === '') return;
+
+    $telegramId = '';
+    foreach (load_users() as $u) {
+        if (strtolower((string)($u['username'] ?? '')) === $usernameLower) {
+            $telegramId = (string)($u['telegram_id'] ?? '');
+            break;
+        }
+    }
+
+    $file = DATA_DIR . '/admin_payment_alerts.json';
+    $alerts = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+    if (!is_array($alerts)) $alerts = [];
+
+    $alerts[] = [
+        'id' => bin2hex(random_bytes(16)),
+        'username' => $usernameLower,
+        'telegram_id' => $telegramId,
+        'plan' => $planTitle,
+        'amount' => $amount,
+        'days' => $days,
+        'created_at' => time(),
+    ];
+
+    file_put_contents($file, json_encode($alerts, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+}
+
+/**
+ * Отдаёт и сразу же очищает недоставленные алерты (один запрос вместо
+ * fetch+ack — если сама доставка в Telegram потом не удастся, алерт
+ * теряется, а не повторяется бесконечно; это админское "приятно знать",
+ * а не критичное событие, так что такой компромисс — ок).
+ */
+function get_and_clear_payment_alerts(int $limit = 100): array
+{
+    $file = DATA_DIR . '/admin_payment_alerts.json';
+    $alerts = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+    if (!is_array($alerts) || empty($alerts)) return [];
+
+    $out = array_slice($alerts, 0, $limit);
+    $remaining = array_slice($alerts, count($out));
+    file_put_contents($file, json_encode($remaining, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+
+    return $out;
+}

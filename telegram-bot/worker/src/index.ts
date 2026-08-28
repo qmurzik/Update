@@ -56,6 +56,12 @@ export default {
         return reportError(env, err, 'scheduled: deliverPendingNotifications');
       })
     );
+    ctx.waitUntil(
+      deliverPendingPaymentAlerts(env).catch((err) => {
+        console.error('scheduled payment alert delivery failed', err);
+        return reportError(env, err, 'scheduled: deliverPendingPaymentAlerts');
+      })
+    );
   },
 };
 
@@ -242,5 +248,42 @@ async function deliverPendingNotifications(env: Env): Promise<void> {
 
   if (acked.length > 0) {
     await adminApi.ackTelegramPush(acked);
+  }
+}
+
+/**
+ * Runs on the same Cron Trigger — "кто/когда/что купил" alerts for the
+ * project owner(s), queued by notify_admin_payment_event() (see
+ * INTEGRATION.md "Алерт админу об оплате"). Separate from
+ * deliverPendingNotifications: these never reach the buyer, only
+ * ADMIN_TELEGRAM_IDS.
+ */
+async function deliverPendingPaymentAlerts(env: Env): Promise<void> {
+  const ids = adminIds(env);
+  if (ids.length === 0) return;
+
+  const tg = new TelegramClient(env);
+  const adminApi = new QmodsAdminApi(env);
+
+  const res = await adminApi.pendingPaymentAlerts(100);
+  const items = res.items ?? [];
+  if (items.length === 0) return;
+
+  for (const item of items) {
+    const dateText = new Date(item.created_at * 1000).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Moscow',
+    });
+    const who = item.telegram_id ? `${esc(item.username)} (id <code>${esc(item.telegram_id)}</code>)` : esc(item.username);
+    const daysText = item.days > 0 ? ` · ${item.days} дн.` : '';
+    const text = `💰 <b>Новая оплата</b>\n\nПользователь: ${who}\nПлан: ${esc(item.plan)}${daysText}\nСумма: ${item.amount} ₽\nДата: ${dateText}`;
+
+    for (const id of ids) {
+      await tg.sendMessage(id, text).catch((err) => console.error('payment alert delivery failed', id, err));
+    }
   }
 }

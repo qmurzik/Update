@@ -465,6 +465,16 @@ if ($action === 'set_app_version') {
 }
 
 // ============================================================
+// PENDING_PAYMENT_ALERTS — "кто/когда/что купил" для админа (cron воркера)
+// ============================================================
+
+if ($action === 'pending_payment_alerts') {
+    $limit = req_int($request, 'limit', 100);
+    $limit = $limit > 0 && $limit <= 500 ? $limit : 100;
+    bot_json(['success' => true, 'items' => get_and_clear_payment_alerts($limit)]);
+}
+
+// ============================================================
 // PENDING_TELEGRAM_PUSHES — очередь на доставку ботом (cron воркера)
 // ============================================================
 

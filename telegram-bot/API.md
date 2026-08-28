@@ -232,6 +232,19 @@ message}`. `min_version_code: 0` = гейт выключен.
 `"update"`, независимо от статуса подписки. Управляется командой бота
 «🚧 Мин. версия приложения» в `/admin`.
 
+### `pending_payment_alerts` *(новое)*
+**Параметры:** `limit` (1–500, по умолчанию 100).
+Отдаёт и сразу очищает необработанные алерты «кто/когда/что купил» (см.
+`notify_admin_payment_event()` в `bot_notify.php` и `INTEGRATION.md`
+«Алерт админу об оплате»):
+```json
+{"success": true, "items": [
+  {"id": "…", "username": "ivan123", "telegram_id": "5110155633", "plan": "Про", "amount": 299, "days": 30, "created_at": 173..}
+]}
+```
+Вызывается только cron-джобой воркера (`scheduled()` → `deliverPendingPaymentAlerts`
+в `src/index.ts`), доставляется на все `ADMIN_TELEGRAM_IDS`, не покупателю.
+
 ### `pending_telegram_pushes` *(новое)*
 **Параметры:** `limit` (1–500, по умолчанию 200).
 Отдаёт уведомления, ещё не доставленные в Telegram, "расплющенные" по
