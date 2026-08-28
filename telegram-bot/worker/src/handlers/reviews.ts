@@ -21,7 +21,7 @@ export async function showReview(ctx: Ctx): Promise<void> {
   if (res.review) {
     lines.push(`${STARS[res.review.rating] ?? ''}`, '', esc(res.review.text), '', `Статус: ${STATUS_LABEL[res.review.status] ?? res.review.status}`);
   } else {
-    lines.push('Поделитесь впечатлением — это помогает другим пользователям и нам самим. Выберите оценку:');
+    lines.push('Расскажите, как вам QMods — это помогает другим и мне тоже приятно читать. Выберите оценку:');
   }
 
   await reply(ctx, lines.join('\n'), reviewStarsKeyboard(!!res.review));
@@ -31,7 +31,7 @@ export async function pickStar(ctx: Ctx, rating: number): Promise<void> {
   await setState(ctx.env, ctx.chatId, 'review_text', { rating });
   await reply(
     ctx,
-    `${STARS[rating]}\n\nТеперь опишите впечатление в паре предложений (минимум 10 символов).`,
+    `${STARS[rating]}\n\nТеперь пара предложений — что понравилось или что стоит поправить (минимум 10 символов).`,
     cancelKeyboard('m:review')
   );
 }
@@ -39,7 +39,7 @@ export async function pickStar(ctx: Ctx, rating: number): Promise<void> {
 export async function handleReviewText(ctx: Ctx, rating: number, text: string): Promise<void> {
   const trimmed = text.trim();
   if (trimmed.length < 10) {
-    await reply(ctx, 'Слишком коротко — минимум 10 символов. Попробуйте ещё раз.', cancelKeyboard('m:review'));
+    await reply(ctx, 'Совсем коротко получилось — минимум 10 символов, попробуйте ещё раз.', cancelKeyboard('m:review'));
     return;
   }
 
@@ -50,5 +50,5 @@ export async function handleReviewText(ctx: Ctx, rating: number, text: string): 
     await reply(ctx, `❌ ${esc(String(result.error ?? 'Не удалось сохранить отзыв'))}`, backButton());
     return;
   }
-  await reply(ctx, '✅ Спасибо! Отзыв отправлен на модерацию.', backButton());
+  await reply(ctx, '✅ Спасибо! Отправила отзыв на модерацию — мне правда приятно 💜', backButton());
 }

@@ -18,10 +18,11 @@ export async function startLink(ctx: Ctx): Promise<void> {
 
   await setState(ctx.env, ctx.chatId, 'link_code');
   const text =
-    '<b>🔗 Привязка аккаунта</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
+    '<b>🔗 Привяжем аккаунт</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
+    'Это займёт минуту:\n' +
     '1. Откройте личный кабинет <a href="https://qmods.ru/mod/cabinet.php">qmods.ru/mod</a>\n' +
     '2. В разделе профиля найдите блок «Telegram» и получите одноразовый код\n' +
-    '3. Пришлите этот код сюда одним сообщением';
+    '3. Пришлите этот код сюда одним сообщением — и я сама всё сделаю';
 
   await reply(ctx, text, linkStartKeyboard());
 }
@@ -31,7 +32,7 @@ export async function handleLinkCodeInput(ctx: Ctx, text: string): Promise<void>
   const allowed = await checkRateLimit(ctx.env, `link:${ctx.chatId}`, LINK_RATE_MAX, LINK_RATE_WINDOW);
   if (!allowed) {
     await clearState(ctx.env, ctx.chatId);
-    await reply(ctx, '⏳ Слишком много попыток. Попробуйте снова через несколько минут: /link');
+    await reply(ctx, '⏳ Что-то слишком много попыток подряд — дай мне (и коду) немного отдохнуть, попробуй снова через несколько минут: /link');
     return;
   }
 
@@ -43,23 +44,23 @@ export async function handleLinkCodeInput(ctx: Ctx, text: string): Promise<void>
     if (ctx.incomingMessageId) {
       await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '🎉').catch(() => undefined);
     }
-    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? ''))}</b> успешно привязан!`);
+    await showMainMenu(ctx, `✅ Готово! Аккаунт <b>${esc(String(result.username ?? ''))}</b> привязан — теперь я тоже за ним присмотрю.`);
     return;
   }
 
   const reason = String(result.error ?? 'Неверный код');
-  await reply(ctx, `❌ ${esc(reason)}. Проверьте код в кабинете и отправьте его ещё раз, либо нажмите «Отмена».`, linkStartKeyboard());
+  await reply(ctx, `❌ ${esc(reason)}. Проверьте код в кабинете и пришлите ещё раз, либо нажмите «Отмена» — не переживайте, ничего не сломалось.`, linkStartKeyboard());
 }
 
 export async function cancelLink(ctx: Ctx): Promise<void> {
   await clearState(ctx.env, ctx.chatId);
-  await showMainMenu(ctx, 'Привязка отменена.');
+  await showMainMenu(ctx, 'Хорошо, привязку отменила. Возвращайтесь, когда будете готовы 💜');
 }
 
 export async function askUnlink(ctx: Ctx): Promise<void> {
   await reply(
     ctx,
-    'Отвязать Telegram от аккаунта QMods? Доступ к разделам бота будет ограничен до повторной привязки.',
+    'Точно отвязать Telegram от аккаунта QMods? Пока не привяжете заново, часть разделов бота будет недоступна.',
     confirmKeyboard('link:unlink:yes', 'm:profile')
   );
 }
@@ -67,8 +68,8 @@ export async function askUnlink(ctx: Ctx): Promise<void> {
 export async function confirmUnlink(ctx: Ctx): Promise<void> {
   const result = await ctx.api.unlink(ctx.telegramId);
   if (!result.success) {
-    await reply(ctx, `Не удалось отвязать аккаунт: ${esc(String(result.error ?? 'ошибка'))}`);
+    await reply(ctx, `Не получилось отвязать аккаунт: ${esc(String(result.error ?? 'ошибка'))}`);
     return;
   }
-  await showMainMenu(ctx, '🔓 Telegram отвязан от аккаунта.');
+  await showMainMenu(ctx, '🔓 Готово, Telegram отвязан от аккаунта.');
 }

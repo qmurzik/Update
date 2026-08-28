@@ -14,10 +14,10 @@ export async function showAppRelease(ctx: Ctx): Promise<void> {
   if (res.download_url) {
     kb.push([{ text: '⬇️ Скачать APK', url: res.download_url }]);
   } else if (res.has_file) {
-    lines.push('', 'Скачивание доступно из личного кабинета — откройте ссылку ниже и авторизуйтесь.');
+    lines.push('', 'Скачать можно из личного кабинета — откройте ссылку ниже и войдите.');
     kb.push([{ text: '🌐 Открыть кабинет', url: res.cabinet_url }]);
   } else {
-    lines.push('', 'Файл приложения сейчас недоступен.');
+    lines.push('', 'Файл приложения сейчас недоступен, загляните чуть позже.');
   }
   kb.push([{ text: '‹ Назад', callback_data: 'm:main' }]);
 

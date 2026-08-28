@@ -25,7 +25,7 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
   if (!me.linked || !me.user) {
     await reply(
       ctx,
-      '🔒 Чтобы привязать приложение, сначала привяжите сам Telegram к аккаунту QMods — нажмите «Привязать аккаунт» ниже, затем откройте ссылку из приложения ещё раз (она действует 10 минут).',
+      '🔒 Чтобы привязать приложение, сперва привяжите сам Telegram к аккаунту QMods — нажмите «Привязать аккаунт» ниже, а затем откройте ссылку из приложения ещё раз (действует 10 минут).',
       mainMenu(ctx.env, false, false)
     );
     return;
@@ -43,7 +43,7 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     }
     await reply(
       ctx,
-      '❌ Код устарел или уже был использован. Вернитесь в приложение и запросите новую привязку.',
+      '❌ Код устарел или уже был использован. Вернитесь в приложение и запросите новую привязку — не страшно, бывает.',
       mainMenu(ctx.env, true, false)
     );
     return;
@@ -58,7 +58,7 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
 
   await reply(
     ctx,
-    `✅ Приложение привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда больше не нужно — приложение само определит, что привязка прошла.`,
+    `✅ Готово, приложение привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда не нужно — приложение само поймёт, что привязка прошла.`,
     mainMenu(ctx.env, true, false)
   );
 }
@@ -69,7 +69,7 @@ export async function handleDevicePairReject(ctx: Ctx, code: string): Promise<vo
   const me = await ctx.api.me(ctx.telegramId);
   await reply(
     ctx,
-    '❌ Вход отклонён. Если это были не вы — можно больше ничего не делать, попытка входа не будет завершена.',
+    '❌ Вход отклонён. Если это были не вы — можно больше ничего не делать, я не пущу, попытка входа не завершится.',
     mainMenu(ctx.env, !!me.linked, false)
   );
 }

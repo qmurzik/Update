@@ -12,9 +12,9 @@ export async function showAchievements(ctx: Ctx): Promise<void> {
   const lines: string[] = ['<b>🏆 Достижения</b>', DIVIDER, ''];
 
   if (res.level_up) {
-    lines.push(`<blockquote>🎉 Новый уровень: <b>${esc(res.level.title)}</b>! Начислено ${daysRu(res.bonus_days)} на подписку.</blockquote>`, '');
+    lines.push(`<blockquote>🎉 Ура, новый уровень: <b>${esc(res.level.title)}</b>! Я уже начислила ${daysRu(res.bonus_days)} на подписку — горжусь вами.</blockquote>`, '');
   } else if (res.newly_unlocked.length > 0) {
-    lines.push(`<blockquote>🎉 Открыто новое достижение! +${res.bonus_days} дн. к подписке.</blockquote>`, '');
+    lines.push(`<blockquote>🎉 Открыто новое достижение! +${res.bonus_days} дн. к подписке — так держать.</blockquote>`, '');
   }
 
   const p = res.progress;

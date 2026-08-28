@@ -29,13 +29,13 @@ export async function showDevices(ctx: Ctx): Promise<void> {
     lines.push(
       '<blockquote>Устройство ещё не привязано</blockquote>',
       '',
-      'Оно появится здесь автоматически после первого входа в приложение QMods.'
+      'Появится здесь само, как только вы первый раз войдёте в приложение QMods — я слежу.'
     );
   } else if (devices.length === 0) {
     lines.push(
       '<blockquote>✅ Приложение привязано</blockquote>',
       '',
-      'Устройство не отображается здесь, но привязка активна и мешает входу с другого устройства — отвяжите её ниже.'
+      'Само устройство здесь не показывается, но привязка активна и не даёт войти с другого — если нужно, отвяжите её ниже.'
     );
   } else {
     lines.push('<blockquote>✅ Устройство привязано</blockquote>', '');
@@ -53,7 +53,7 @@ export async function showDevices(ctx: Ctx): Promise<void> {
 export async function askRemoveDevice(ctx: Ctx): Promise<void> {
   await reply(
     ctx,
-    'Отвязать текущее устройство? Приложение потребует повторного входа на этом устройстве. Подписка при этом сохранится.',
+    'Отвязать текущее устройство? На нём потребуется войти заново, а подписка никуда не денется.',
     confirmKeyboard('dev:rm:yes', 'm:devices')
   );
 }
@@ -66,7 +66,7 @@ export async function confirmRemoveDevice(ctx: Ctx): Promise<void> {
   if (device) {
     const result = await ctx.api.deviceRemove(ctx.telegramId, device.id);
     if (!result.success) {
-      await reply(ctx, `Не удалось отвязать устройство: ${esc(String(result.error ?? 'ошибка'))}`);
+      await reply(ctx, `Не получилось отвязать устройство: ${esc(String(result.error ?? 'ошибка'))}`);
       return;
     }
   }

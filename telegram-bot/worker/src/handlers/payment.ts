@@ -14,7 +14,7 @@ export async function askBuyPlan(ctx: Ctx): Promise<void> {
   const res = await ctx.api.plans();
   const plans = res.plans ?? [];
   if (plans.length === 0) {
-    await reply(ctx, 'Тарифы временно недоступны — попробуйте позже или продлите через сайт.', backButton('m:pay'));
+    await reply(ctx, 'Тарифы сейчас недоступны — попробуйте чуть позже или продлите через сайт, простите за неудобство.', backButton('m:pay'));
     return;
   }
 
@@ -22,7 +22,7 @@ export async function askBuyPlan(ctx: Ctx): Promise<void> {
   for (const p of plans) {
     lines.push(`<b>${esc(p.title)}</b> — ${money(p.price)} / ${p.days} дн.`);
   }
-  lines.push('', 'Оплата через ЮMoney — картой или с кошелька. Подписка активируется автоматически.');
+  lines.push('', 'Оплата через ЮMoney — картой или с кошелька. Как только деньги дойдут, подписка включится сама, без моего участия — но я на всякий случай проверю.');
 
   await reply(ctx, lines.join('\n'), planPickerKeyboard(plans));
 }
@@ -35,7 +35,7 @@ export async function handleBuyPlan(ctx: Ctx, planId: string): Promise<void> {
   const res = await ctx.api.plans();
   const plan = (res.plans ?? []).find((p) => p.id === planId);
   if (!plan) {
-    await reply(ctx, 'Тариф не найден — возможно, список обновился. Откройте оплату заново.', backButton('m:pay'));
+    await reply(ctx, 'Не нашла такой тариф — похоже, список обновился. Откройте оплату заново.', backButton('m:pay'));
     return;
   }
 
@@ -55,12 +55,12 @@ export async function handleBuyPlan(ctx: Ctx, planId: string): Promise<void> {
 export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void> {
   const order = await getPaymentOrder(ctx.env, orderId);
   if (!order) {
-    await reply(ctx, 'Заказ не найден — возможно, устарел. Начните оплату заново.', backButton('m:pay'));
+    await reply(ctx, 'Не нашла такой заказ — возможно, он устарел. Начните оплату заново.', backButton('m:pay'));
     return;
   }
 
   if (order.status === 'paid') {
-    await reply(ctx, `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — приятного использования QMods.`, backButton('m:main'));
+    await reply(ctx, `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — пользуйтесь на здоровье, а я пока присмотрю за остальным.`, backButton('m:main'));
     return;
   }
 
@@ -81,8 +81,8 @@ function buildPayMessage(planTitle: string, amount: number, pending: boolean): s
   lines.push(
     '',
     pending
-      ? 'Платёж пока не подтверждён — обычно это занимает не больше минуты. Если уже оплатили, подождите немного и нажмите «Проверить оплату» ещё раз.'
-      : 'Нажмите «Оплатить», выберите способ на странице ЮMoney. После оплаты подписка активируется автоматически — обычно в течение минуты.'
+      ? 'Платёж пока не подтверждён — обычно это занимает не больше минуты. Если уже оплатили, подождите немного и нажмите «Проверить оплату» ещё раз, я перепроверю.'
+      : 'Нажмите «Оплатить», выберите способ на странице ЮMoney. Как только оплата пройдёт — подписка включится сама, обычно в течение минуты.'
   );
   return lines.join('\n');
 }

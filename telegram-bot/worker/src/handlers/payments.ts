@@ -12,7 +12,7 @@ export async function showPayments(ctx: Ctx): Promise<void> {
   const lines = ['<b>💳 Оплата и продление</b>', DIVIDER, ''];
 
   if (payments.length === 0) {
-    lines.push('<blockquote>Платежей пока не было</blockquote>', '', 'Выберите тариф на странице оплаты — доступ откроется сразу после подтверждения.');
+    lines.push('<blockquote>Платежей пока не было</blockquote>', '', 'Выберите тариф на странице оплаты — включу доступ сразу после подтверждения.');
   } else {
     lines.push(`<blockquote>Всего платежей: ${payments.length}</blockquote>`, '', '<b>История:</b>');
     for (const p of payments.slice(0, 10)) {

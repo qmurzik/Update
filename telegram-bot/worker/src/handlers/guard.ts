@@ -16,7 +16,7 @@ export async function requireLinked(ctx: Ctx, me: MeResult): Promise<boolean> {
   if (me.linked && me.user) return true;
   await reply(
     ctx,
-    'Этот раздел доступен только после привязки аккаунта QMods. Нажмите кнопку ниже, чтобы привязать.',
+    'Этот раздел открывается только после привязки аккаунта QMods — нажмите кнопку ниже, я подожду 💜',
     mainMenu(ctx.env, false, false)
   );
   return false;

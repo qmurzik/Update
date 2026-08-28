@@ -260,8 +260,8 @@ export const APP_HTML = `<!doctype html>
 
 <div id="linkScreen" class="center-screen hidden">
   <img class="mascot" src="__KIRA_HERO__" alt="Кира" onerror="this.style.display='none'">
-  <div class="logo" style="font-size:20px;margin-bottom:6px">Привет, я Кира 🖤</div>
-  <p class="muted" style="max-width:280px">Аккаунт ещё не привязан. Введите одноразовый код из личного кабинета qmods.ru/mod.</p>
+  <div class="logo" style="font-size:20px;margin-bottom:6px">Привет, я Кира 💜</div>
+  <p class="muted" style="max-width:280px">Аккаунт ещё не привязан — введите одноразовый код из личного кабинета qmods.ru/mod, и я всё улажу.</p>
   <input type="text" id="codeInput" maxlength="10" placeholder="ХХХХХХХХХХ" style="max-width:220px;margin-top:14px">
   <button class="btn primary" style="max-width:220px" onclick="doLink()">Привязать</button>
   <p id="linkError" class="muted" style="color:var(--danger)"></p>

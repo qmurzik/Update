@@ -6,12 +6,12 @@ import { DIVIDER, esc, kiraImage } from '../util';
 import { reply } from './reply';
 
 const KIRA_INTRO =
-  'Привет! Я Кира 🖤 Помогаю с QMods прямо здесь, в Telegram — подписка, устройства, достижения и уведомления под рукой, без захода на сайт.';
+  'Привет, я Кира 💜 Буду рядом и присмотрю за твоим QMods прямо здесь, в Telegram — подписка, устройства, достижения и уведомления под рукой, без захода на сайт.';
 
-const WELCOME = `<b>Чем займёмся?</b>
+const WELCOME = `<b>Привет! Чем помочь?</b>
 ${DIVIDER}
 
-Аккаунт тот же, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a>.`;
+Аккаунт тот же, что и в личном кабинете <a href="https://qmods.ru/mod">qmods.ru/mod</a> — просто теперь я тоже за ним слежу.`;
 
 /** /start — Kira's intro photo (once), then greet, resolve link status, show the main menu. */
 export async function handleStart(ctx: Ctx): Promise<void> {
@@ -46,7 +46,7 @@ export async function showMainMenu(ctx: Ctx, prefaceText?: string): Promise<void
     lines.push(`<blockquote>${statusLine}</blockquote>`);
   } else {
     lines.push(
-      '🔒 Аккаунт QMods ещё не привязан. Если уже регистрировались на сайте — привяжите его кодом из кабинета. Новый аккаунт можно создать прямо здесь, без сайта.'
+      '🔒 Аккаунт QMods пока не привязан — давай это исправим. Если уже регистрировались на сайте, привяжите его кодом из кабинета; а если нет — заведём новый прямо здесь, без сайта.'
     );
   }
 

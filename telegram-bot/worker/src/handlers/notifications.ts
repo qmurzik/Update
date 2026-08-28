@@ -19,7 +19,7 @@ export async function showNotifications(ctx: Ctx): Promise<void> {
   const lines = ['<b>🔔 Уведомления</b>', DIVIDER, ''];
 
   if (items.length === 0) {
-    lines.push('<blockquote>Уведомлений пока нет</blockquote>');
+    lines.push('<blockquote>Уведомлений пока нет — здесь пусто и тихо</blockquote>');
   } else {
     if (unreadCount > 0) lines.push(`<blockquote>Новых: ${unreadCount}</blockquote>`, '');
     for (const n of items) {

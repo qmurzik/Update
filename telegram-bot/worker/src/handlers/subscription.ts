@@ -12,14 +12,14 @@ export async function showSubscription(ctx: Ctx): Promise<void> {
   const lines = ['<b>⭐ Моя подписка</b>', DIVIDER, ''];
 
   if (!sub.plan || sub.plan === 'none') {
-    lines.push('<blockquote>У вас нет активной подписки.</blockquote>');
+    lines.push('<blockquote>Активной подписки пока нет.</blockquote>', '', 'Выберите тариф ниже — я включу доступ, как только пройдёт оплата.');
   } else if (sub.active) {
     lines.push(`<blockquote>🟢 <b>Активна</b> · осталось ${daysRu(sub.days_left)}</blockquote>`);
-    if (sub.days_left <= 3) lines.push('', '⚠️ Подписка скоро закончится — продлите её заранее.');
+    if (sub.days_left <= 3) lines.push('', '⚠️ Скоро закончится — загляните продлить, чтобы доступ не прервался.');
     lines.push('', `Тариф: <b>${esc(sub.plan)}</b>`, `Дата окончания: ${esc(sub.expires_text)}`);
   } else {
     lines.push(`<blockquote>🔴 <b>Истекла</b> ${esc(sub.expires_text)}</blockquote>`);
-    lines.push('', '❗️ Продлите подписку, чтобы восстановить доступ.', '', `Тариф: <b>${esc(sub.plan)}</b>`);
+    lines.push('', '❗️ Продлите, и я сразу же верну доступ.', '', `Тариф: <b>${esc(sub.plan)}</b>`);
   }
 
   await reply(ctx, lines.join('\n'), subscriptionKeyboard(ctx.env));

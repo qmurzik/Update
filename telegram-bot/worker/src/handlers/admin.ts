@@ -28,14 +28,14 @@ const USERS_PAGE_SIZE = 8;
 
 async function requireAdmin(ctx: Ctx): Promise<boolean> {
   if (isAdmin(ctx.env, ctx.telegramId)) return true;
-  await reply(ctx, '⛔ Недостаточно прав.');
+  await reply(ctx, '⛔ Тут только для своих — недостаточно прав.');
   return false;
 }
 
 export async function showAdminMenu(ctx: Ctx): Promise<void> {
   if (!(await requireAdmin(ctx))) return;
   await clearState(ctx.env, ctx.chatId);
-  await reply(ctx, `<b>🛠 Админ-панель QMods</b>\n${DIVIDER}`, adminMenuKeyboard());
+  await reply(ctx, `<b>🛠 Админ-панель QMods</b>\n${DIVIDER}\n\nЯ тут, чем займёмся?`, adminMenuKeyboard());
 }
 
 export async function showStats(ctx: Ctx): Promise<void> {
@@ -229,7 +229,7 @@ export async function handleMessageInput(ctx: Ctx, username: string, text: strin
     }
   }
 
-  await reply(ctx, res.success ? '✅ Сообщение отправлено.' : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+  await reply(ctx, res.success ? '✅ Отправила.' : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
 }
 
 export async function askBroadcast(ctx: Ctx): Promise<void> {
@@ -251,7 +251,7 @@ export async function handleBroadcastInput(ctx: Ctx, text: string): Promise<void
   await reply(
     ctx,
     res.success
-      ? '✅ Рассылка создана — уйдёт в Telegram всем привязанным пользователям в течение нескольких минут, а в приложении появится при следующей проверке подписки.'
+      ? '✅ Готово, разнесу всем привязанным пользователям в течение нескольких минут, а в приложении появится при следующей проверке подписки.'
       : `❌ ${esc(String(res.error ?? ''))}`,
     cancelKeyboard('adm:menu')
   );
@@ -320,8 +320,8 @@ export async function showSiteAuthGate(ctx: Ctx): Promise<void> {
     `Сейчас: ${enabled ? '🟢 включены' : '🔴 выключены'}.`,
     '',
     enabled
-      ? 'Пользователи всё ещё могут входить и регистрироваться на qmods.ru напрямую. Выключите, когда будете готовы завершить миграцию в бота.'
-      : 'Формы входа/регистрации на сайте показывают подсказку перейти в Telegram-бота. Привязка уже существующих аккаунтов по коду продолжает работать как обычно, и новые аккаунты по-прежнему можно создать прямо в боте.',
+      ? 'Пользователи всё ещё могут входить и регистрироваться на qmods.ru напрямую. Выключайте, когда будете готовы окончательно переехать в бота — я справлюсь.'
+      : 'Формы входа/регистрации на сайте показывают подсказку перейти в Telegram-бота. Привязка уже существующих аккаунтов по коду продолжает работать как обычно, и новые аккаунты по-прежнему можно создать прямо здесь, у меня.',
   ];
 
   await reply(ctx, lines.join('\n'), siteAuthGateKeyboard(enabled));

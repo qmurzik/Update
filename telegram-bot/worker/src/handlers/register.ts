@@ -23,8 +23,8 @@ export async function startRegister(ctx: Ctx): Promise<void> {
 
   await setState(ctx.env, ctx.chatId, 'register_username');
   const text =
-    '<b>🆕 Регистрация в Telegram</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
-    'Придумайте никнейм для нового аккаунта QMods (3–20 символов: латиница, цифры, _ и -) и пришлите его одним сообщением.';
+    '<b>🆕 Заведём новый аккаунт</b>\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n\n' +
+    'Придумайте никнейм (3–20 символов: латиница, цифры, _ и -) и пришлите его одним сообщением — сайт вообще не понадобится.';
 
   await reply(ctx, text, registerStartKeyboard());
 }
@@ -34,13 +34,13 @@ export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promi
   const allowed = await checkRateLimit(ctx.env, `register:${ctx.chatId}`, REGISTER_RATE_MAX, REGISTER_RATE_WINDOW);
   if (!allowed) {
     await clearState(ctx.env, ctx.chatId);
-    await reply(ctx, '⏳ Слишком много попыток. Попробуйте снова через несколько минут: /start');
+    await reply(ctx, '⏳ Многовато попыток подряд — переведём дыхание и попробуем снова через пару минут: /start');
     return;
   }
 
   const username = text.trim();
   if (!USERNAME_RE.test(username)) {
-    await reply(ctx, '❌ Никнейм должен быть 3–20 символов: латиница, цифры, _ и -. Попробуйте другой.', registerStartKeyboard());
+    await reply(ctx, '❌ Никнейм должен быть 3–20 символов: латиница, цифры, _ и -. Попробуйте ещё раз.', registerStartKeyboard());
     return;
   }
 
@@ -52,9 +52,9 @@ export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promi
       await ctx.tg.setMessageReaction(ctx.chatId, ctx.incomingMessageId, '🎉').catch(() => undefined);
     }
     const trialText = result.trial
-      ? '\n\n🎁 Вам открыт пробный доступ на 24 часа.'
+      ? '\n\n🎁 Дарю пробный доступ на 24 часа — успевайте освоиться.'
       : '\n\nЧтобы пользоваться QMods — оформите подписку в разделе «⭐ Подписка».';
-    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? username))}</b> создан и привязан к Telegram!${trialText}`);
+    await showMainMenu(ctx, `✅ Аккаунт <b>${esc(String(result.username ?? username))}</b> создан и сразу привязан к Telegram — добро пожаловать!${trialText}`);
     return;
   }
 
@@ -64,5 +64,5 @@ export async function handleRegisterUsernameInput(ctx: Ctx, text: string): Promi
 
 export async function cancelRegister(ctx: Ctx): Promise<void> {
   await clearState(ctx.env, ctx.chatId);
-  await showMainMenu(ctx, 'Регистрация отменена.');
+  await showMainMenu(ctx, 'Хорошо, регистрацию отменила. Я никуда не денусь, если передумаете 💜');
 }

@@ -102,8 +102,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const tg = new TelegramClient(env);
     await tg.setPersona(
       'Кира — QMods Bot',
-      'Привет! Я Кира 🖤 Помогу привязать аккаунт QMods, буду следить за подпиской, устройствами и уведомлениями — прямо здесь, в Telegram, без захода на сайт.\n\nНажмите Start, чтобы начать.',
-      'Кира — твой помощник QMods в Telegram: подписка, устройства, достижения 🖤'
+      'Привет, я Кира 💜 Присмотрю за твоим QMods прямо здесь, в Telegram — подписка, устройства, достижения и уведомления под рукой, без захода на сайт. А если что-то сломается — разберёмся вместе.\n\nНажми Start, чтобы начать.',
+      'Кира — забочусь о твоём QMods в Telegram: подписка, устройства, достижения 💜'
     );
     return new Response('Profile updated. Аватар всё ещё нужно задать вручную через @BotFather -> /setuserpic.', { status: 200 });
   }

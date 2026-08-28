@@ -191,7 +191,7 @@ async function handleDocument(update: TgUpdate, env: Env): Promise<void> {
   } catch (err) {
     console.error('document handler failed', err);
     await reportError(env, err, 'document upload');
-    await reply(ctx, '⚠️ Что-то пошло не так на нашей стороне. Мы уже в курсе — попробуйте ещё раз через минуту.').catch(() => undefined);
+    await reply(ctx, '⚠️ Ой, что-то пошло не так на моей стороне — я уже в курсе, попробуйте ещё раз через минуту 💜').catch(() => undefined);
   }
 }
 
@@ -207,7 +207,7 @@ async function handleMessage(update: TgUpdate, env: Env): Promise<void> {
   } catch (err) {
     console.error('message handler failed', text, err);
     await reportError(env, err, `message "${text.slice(0, 40)}"`);
-    await reply(ctx, '⚠️ Что-то пошло не так на нашей стороне. Мы уже в курсе — попробуйте ещё раз через минуту.').catch(() => undefined);
+    await reply(ctx, '⚠️ Ой, что-то пошло не так на моей стороне — я уже в курсе, попробуйте ещё раз через минуту 💜').catch(() => undefined);
   }
 }
 
@@ -262,18 +262,18 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
       case '/admin':
         return showAdminMenu(ctx);
       default:
-        return reply(ctx, 'Неизвестная команда. Отправьте /start, чтобы открыть меню.');
+        return reply(ctx, 'Не поняла команду — отправьте /start, откроем меню заново.');
     }
   }
 
   const state = await getState(env, chatId);
   if (!state) {
-    return reply(ctx, 'Отправьте /start, чтобы открыть меню.');
+    return reply(ctx, 'Отправьте /start, и я открою меню.');
   }
 
   if (ADMIN_STATES.has(state.awaiting) && !isAdmin(env, telegramId)) {
     await clearState(env, chatId);
-    return reply(ctx, '⛔ Недостаточно прав.');
+    return reply(ctx, '⛔ Тут только для своих — недостаточно прав.');
   }
 
   switch (state.awaiting) {
@@ -299,7 +299,7 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
       return handleReviewText(ctx, Number(state.payload.rating ?? 0), text);
     default:
       await clearState(env, chatId);
-      return reply(ctx, 'Отправьте /start, чтобы открыть меню.');
+      return reply(ctx, 'Отправьте /start, и я открою меню.');
   }
 }
 

@@ -26,7 +26,7 @@ export async function handleInlineQuery(query: TgInlineQuery, env: Env): Promise
         title: '🔒 Аккаунт QMods не привязан',
         description: 'Откройте бота в личном чате и привяжите аккаунт, чтобы делиться статусом',
         input_message_content: {
-          message_text: 'Ещё не привязал(а) аккаунт QMods к Telegram — сделаю это в @qmods_bot 🖤',
+          message_text: 'Ещё не привязал(а) аккаунт QMods к Telegram — сделаю это в @qmods_bot 💜',
         },
       },
     ];

@@ -388,9 +388,9 @@ function render_site_auth_gate_block(): void
     echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<style>body{margin:0;background:#050508;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}'
         . '.b{text-align:center;padding:24px;max-width:420px}.i{font-size:56px}.t{font-size:18px;font-weight:700;margin:12px 0}'
-        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:#3157ff;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
-        . '</head><body><div class="b"><div class="i">🤖</div><div class="t">Вход и регистрация переехали в Telegram</div>'
-        . '<div class="d">Мы переносим управление аккаунтом в Telegram-бота QMods — подписка, устройства, оплата и уведомления там же, без пароля от сайта.</div>'
+        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:linear-gradient(135deg,#7c3aed,#3157ff);color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
+        . '</head><body><div class="b"><div class="i">💜</div><div class="t">Вход и регистрация переехали в Telegram</div>'
+        . '<div class="d">Я Кира — теперь слежу за аккаунтом там: подписка, устройства, оплата и уведомления в одном месте, без пароля от сайта.</div>'
         . '<a href="https://t.me/qmods_bot">Открыть @qmods_bot</a></div></body></html>';
     exit;
 }
@@ -475,12 +475,12 @@ function render_update_required_block(?array $user = null): void
 
             $linkSection =
                 '<div style="margin-top:20px;padding-top:20px;border-top:1px solid #1b2333">'
-                . '<div class="d" style="margin-bottom:12px">Аккаунт <b style="color:#f1f5f9">' . $username . '</b> ещё активен. '
-                . 'Привяжите Telegram сейчас, чтобы не потерять доступ после обновления:</div>'
+                . '<div class="d" style="margin-bottom:12px">Аккаунт <b style="color:#f1f5f9">' . $username . '</b> ещё активен — привяжите Telegram '
+                . 'сейчас, и я не дам ему потеряться после обновления:</div>'
                 . '<div class="d" style="margin-bottom:8px">Ссылки внутри старого приложения открываются не всегда — надёжнее всего отсканировать QR-код камерой телефона или QR-сканером в самом Telegram:</div>'
                 . '<img src="' . htmlspecialchars($qrSrc, ENT_QUOTES, 'UTF-8') . '" width="220" height="220" '
                 . 'style="display:block;margin:0 auto;border-radius:12px;background:#fff;padding:8px" alt="QR-код для привязки Telegram">'
-                . '<a href="' . htmlspecialchars($intentUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#3157ff;margin-top:16px">Или открыть бота ссылкой</a>'
+                . '<a href="' . htmlspecialchars($intentUrl, ENT_QUOTES, 'UTF-8') . '" style="background:linear-gradient(135deg,#7c3aed,#3157ff);margin-top:16px">Или открыть бота ссылкой</a>'
                 . '<div class="d" style="margin-top:10px;font-size:12px">Не открылось? '
                 . '<a href="' . htmlspecialchars($fallbackUrl, ENT_QUOTES, 'UTF-8') . '" style="display:inline;padding:0;background:none;color:#9db4ff;font-weight:400">попробуйте обычную ссылку</a>'
                 . '</div>'
@@ -501,9 +501,9 @@ function render_update_required_block(?array $user = null): void
     echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<style>body{margin:0;background:#050508;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}'
         . '.b{text-align:center;padding:24px;max-width:420px}.i{font-size:56px}.t{font-size:18px;font-weight:700;margin:12px 0}'
-        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:#6366f1;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
-        . '</head><body><div class="b"><div class="i">⬇️</div><div class="t">Требуется обновление приложения</div>'
-        . '<div class="d">Эта версия приложения больше не поддерживается. Обновите его, чтобы продолжить пользоваться QMods.</div>'
+        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:linear-gradient(135deg,#7c3aed,#3157ff);color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
+        . '</head><body><div class="b"><div class="i">⬇️</div><div class="t">Нужно обновить приложение</div>'
+        . '<div class="d">Эта версия больше не поддерживается — обновите её, чтобы я могла и дальше присматривать за вашим QMods.</div>'
         . '<a href="https://qmods.ru/mod/download.php">Скачать новую версию</a>'
         . $linkSection
         . '</div></body></html>';

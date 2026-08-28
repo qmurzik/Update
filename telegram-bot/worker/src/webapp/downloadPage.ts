@@ -36,7 +36,7 @@ export function renderDownloadPage(data: DownloadPageData): string {
       <a class="dl-btn" href="${esc(data.downloadUrl)}">⬇️ Скачать APK${data.apkSize ? ` <span>· ${fmtBytes(data.apkSize)}</span>` : ''}</a>
       <p class="hint">Файл скачивается напрямую с сервера, без установки стороннего лаунчера. Android может предупредить об «неизвестном источнике» — это нормально для APK не из Google Play, разрешите установку в настройках.</p>`
     : `
-      <p class="hint">Файл сейчас недоступен для скачивания. Попробуйте открыть личный кабинет или написать в поддержку.</p>
+      <p class="hint">Файл сейчас недоступен — загляните позже или откройте личный кабинет.</p>
       <a class="dl-btn dl-btn-secondary" href="${esc(data.cabinetUrl)}">🌐 Личный кабинет</a>`;
 
   return `<!doctype html>
@@ -94,7 +94,7 @@ export function renderDownloadPage(data: DownloadPageData): string {
     ${data.version ? `<div class="ver">версия ${esc(data.version)}</div>` : ''}
     ${changelogHtml ? `<ul class="changelog">${changelogHtml}</ul>` : ''}
     ${body}
-    <div class="footer">Открыто из Telegram-бота QMods · <a href="${esc(data.cabinetUrl)}">кабинет на сайте</a></div>
+    <div class="footer">Собрала для тебя Кира 💜 · <a href="${esc(data.cabinetUrl)}">кабинет на сайте</a></div>
   </div>
 </body>
 </html>`;
