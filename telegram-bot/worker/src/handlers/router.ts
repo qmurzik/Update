@@ -12,6 +12,7 @@ import { showProfile } from './profile';
 import { showSubscription } from './subscription';
 import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
 import { showPayments } from './payments';
+import { askBuyPlan, checkOrderStatus, handleBuyPlan, handlePaidReturn } from './payment';
 import { markAllRead, showNotifications } from './notifications';
 import { showSupport } from './support';
 import { showAchievements } from './achievements';
@@ -46,6 +47,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'm:sub': showSubscription,
   'm:devices': showDevices,
   'm:pay': showPayments,
+  'pay:plans': askBuyPlan,
   'm:notif': showNotifications,
   'm:support': showSupport,
   'm:ach': showAchievements,
@@ -90,6 +92,14 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
   if (data.startsWith('rev:star:')) {
     const rating = parseInt(data.slice('rev:star:'.length), 10);
     if (rating >= 1 && rating <= 5) return (ctx) => pickStar(ctx, rating);
+  }
+  if (data.startsWith('pay:plan:')) {
+    const planId = data.slice('pay:plan:'.length);
+    return (ctx) => handleBuyPlan(ctx, planId);
+  }
+  if (data.startsWith('pay:check:')) {
+    const orderId = data.slice('pay:check:'.length);
+    return (ctx) => checkOrderStatus(ctx, orderId);
   }
   return null;
 }
@@ -151,6 +161,13 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
         const deviceLink = /^devicelink_([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/.exec(payload);
         if (deviceLink) {
           return handleDevicePairClaim(ctx, deviceLink[1]);
+        }
+        // ЮMoney Quickpay successURL — t.me/<bot>?start=paid_<orderId>, see
+        // handlers/payment.ts buildOrderUrl(). Just shows current order
+        // status; the webhook (not this) is what actually grants the days.
+        const paidReturn = /^paid_([0-9a-f]{32})$/.exec(payload);
+        if (paidReturn) {
+          return handlePaidReturn(ctx, paidReturn[1]);
         }
         return handleStart(ctx);
       }

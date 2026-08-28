@@ -248,6 +248,23 @@ export class QmodsAdminApi {
     return callApi(this.url, this.token, 'ack_telegram_push', { items }, 'POST');
   }
 
+  /**
+   * Records a REAL confirmed payment (ЮMoney webhook, sha1-verified) —
+   * extends the subscription AND appends a payments[] entry (unlike
+   * `issue`, which only extends — a manual admin grant isn't a purchase).
+   * Also fires both notify_user_event (buyer) and notify_admin_payment_event
+   * (owner alert) server-side, so the Worker doesn't need to duplicate that.
+   */
+  recordPayment(username: string, plan: string, days: number, amount: number) {
+    return callApi<{ message: string; expires_at: number; user_id: string; notification_id: string }>(
+      this.url,
+      this.token,
+      'record_payment',
+      { username, plan, days, amount },
+      'POST'
+    );
+  }
+
   /** "Кто/когда/что купил" alerts queued by notify_admin_payment_event() — see index.ts deliverPendingPaymentAlerts. */
   pendingPaymentAlerts(limit = 100) {
     return callApi<{

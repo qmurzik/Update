@@ -6,10 +6,12 @@ import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
-import { checkRateLimit, createDevicePairing, getDevicePairing, getUsernameByDeviceToken } from './db';
+import { checkRateLimit, createDevicePairing, getDevicePairing, getPaymentOrder, getUsernameByDeviceToken, markPaymentOrderPaid } from './db';
+import type { PaymentOrderRow } from './db';
 import type { TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi } from './webapp/api';
+import { parseNotification, verifyNotificationSignature } from './yoomoney';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
@@ -191,6 +193,60 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     });
   }
 
+  // ============================================================
+  // ЮMoney HTTP-notification — see handlers/payment.ts and
+  // yoomoney.ts. No custom headers/auth possible on ЮMoney's side; the
+  // sha1_hash IS the only authentication, so every field is untrusted
+  // until verifyNotificationSignature() passes.
+  // ============================================================
+
+  if (url.pathname === '/pay/yoomoney/webhook' && request.method === 'POST') {
+    const bodyText = await request.text();
+    const notification = parseNotification(new URLSearchParams(bodyText));
+
+    const validSignature = await verifyNotificationSignature(env, notification);
+    if (!validSignature) {
+      console.error('yoomoney webhook: bad signature', notification.operation_id || '(no operation_id)');
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    // "true" means the payment is on hold (e.g. anti-fraud/protection-code)
+    // and isn't real settled money yet — ack (200, so it isn't retried
+    // forever) but don't grant anything; a later notification for the same
+    // operation, once accepted, will carry unaccepted=false.
+    if (notification.unaccepted === 'true') {
+      return new Response('OK', { status: 200 });
+    }
+
+    const order = await getPaymentOrder(env, notification.label);
+    if (!order) {
+      console.error('yoomoney webhook: unknown order label', notification.label);
+      return new Response('OK', { status: 200 });
+    }
+
+    const receivedAmount = Number.parseFloat(notification.amount);
+    if (!Number.isFinite(receivedAmount) || receivedAmount < order.amount - 0.01) {
+      console.error('yoomoney webhook: amount mismatch', order.id, notification.amount, 'expected', order.amount);
+      ctx.waitUntil(reportError(env, new Error(`ЮMoney amount mismatch on order ${order.id}`), 'yoomoney webhook'));
+      return new Response('OK', { status: 200 });
+    }
+
+    // Idempotency guard — markPaymentOrderPaid only flips a still-'pending'
+    // row, so a retried notification for an already-granted order is a
+    // harmless no-op here (ЮMoney resends until it gets HTTP 200).
+    const granted = await markPaymentOrderPaid(env, order.id, notification.operation_id);
+    if (granted) {
+      ctx.waitUntil(
+        finalizePayment(env, order).catch((err) => {
+          console.error('yoomoney webhook: finalizePayment failed', order.id, err);
+          return reportError(env, err, `yoomoney webhook: finalizePayment(${order.id})`);
+        })
+      );
+    }
+
+    return new Response('OK', { status: 200 });
+  }
+
   if (url.pathname !== '/webhook' || request.method !== 'POST') {
     return new Response('Not found', { status: 404 });
   }
@@ -285,5 +341,35 @@ async function deliverPendingPaymentAlerts(env: Env): Promise<void> {
     for (const id of ids) {
       await tg.sendMessage(id, text).catch((err) => console.error('payment alert delivery failed', id, err));
     }
+  }
+}
+
+/**
+ * Applies a just-confirmed ЮMoney payment: grants the days via
+ * mod/admin/bot.php's record_payment (extends subscription + logs payment
+ * history), then confirms directly to the buyer. record_payment also
+ * queues the same confirmation via notify_user_event() (so it shows in
+ * the cabinet bell too) — acking it here via ackTelegramPush prevents the
+ * 5-min cron from delivering that same message a second time (same fix as
+ * handleMessageInput's dedupe, see handlers/admin.ts).
+ */
+async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> {
+  const adminApi = new QmodsAdminApi(env);
+  const res = await adminApi.recordPayment(order.username, order.plan_title, order.days, order.amount);
+  if (!res.success) {
+    throw new Error(`record_payment failed for order ${order.id}: ${res.error ?? 'unknown'}`);
+  }
+
+  const tg = new TelegramClient(env);
+  const sent = await tg
+    .sendMessage(order.telegram_id, `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`)
+    .then(() => true)
+    .catch((err) => {
+      console.error('payment confirmation delivery failed', order.telegram_id, err);
+      return false;
+    });
+
+  if (sent && res.notification_id && res.user_id) {
+    await adminApi.ackTelegramPush([{ notification_id: res.notification_id, user_id: res.user_id }]).catch(() => undefined);
   }
 }

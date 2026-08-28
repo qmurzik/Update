@@ -193,3 +193,56 @@ export async function revokeDeviceTokensForUsername(env: Env, username: string):
   if (!username) return;
   await env.DB.prepare('DELETE FROM device_tokens WHERE username = ?').bind(username).run();
 }
+
+export interface PaymentOrderRow {
+  id: string;
+  telegram_id: string;
+  username: string;
+  plan_id: string;
+  plan_title: string;
+  days: number;
+  amount: number;
+  status: 'pending' | 'paid';
+  operation_id: string | null;
+  created_at: number;
+  paid_at: number | null;
+}
+
+/**
+ * Starts a "Купить подписку" attempt (bot inline buttons or the Mini App's
+ * "Оплата" tab) — see yoomoney.ts. The generated id is also used as
+ * ЮMoney's Quickpay `label` param, so the webhook can resolve an incoming
+ * notification back to who/what/how-much from OUR OWN record rather than
+ * trusting the notification's own claims about the order.
+ */
+export async function createPaymentOrder(
+  env: Env,
+  args: { telegramId: string; username: string; planId: string; planTitle: string; days: number; amount: number }
+): Promise<string> {
+  const id = randomHex(16);
+  await env.DB.prepare(
+    'INSERT INTO payment_orders (id, telegram_id, username, plan_id, plan_title, days, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  )
+    .bind(id, args.telegramId, args.username, args.planId, args.planTitle, args.days, args.amount, 'pending', Date.now())
+    .run();
+  return id;
+}
+
+export async function getPaymentOrder(env: Env, id: string): Promise<PaymentOrderRow | null> {
+  if (!id) return null;
+  return env.DB.prepare('SELECT * FROM payment_orders WHERE id = ?').bind(id).first<PaymentOrderRow>();
+}
+
+/**
+ * Marks an order paid — guarded by `AND status = 'pending'` so a retried
+ * ЮMoney notification (it repeats delivery until it gets HTTP 200) can
+ * never grant the same order's days twice. Returns true only for the
+ * transition that actually happened (the caller should only extend the
+ * subscription / send confirmations on a true result).
+ */
+export async function markPaymentOrderPaid(env: Env, id: string, operationId: string): Promise<boolean> {
+  const res = await env.DB.prepare("UPDATE payment_orders SET status = 'paid', operation_id = ?, paid_at = ? WHERE id = ? AND status = 'pending'")
+    .bind(operationId, Date.now(), id)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}

@@ -29,10 +29,11 @@ directory = "./public"
 crons = ["*/5 * * * *"]
 
 # Секреты (НЕ хранить в этом файле, задаются через `wrangler secret put`):
-#   TELEGRAM_BOT_TOKEN         — токен бота от @BotFather
-#   TELEGRAM_WEBHOOK_SECRET    — случайная строка, см. README (setWebhook secret_token)
-#   QMODS_BOT_API_TOKEN        — токен для mod/api/bot.php (пользовательский)
-#   QMODS_ADMIN_BOT_API_TOKEN  — токен для mod/admin/bot.php (админский)
+#   TELEGRAM_BOT_TOKEN            — токен бота от @BotFather
+#   TELEGRAM_WEBHOOK_SECRET       — случайная строка, см. README (setWebhook secret_token)
+#   QMODS_BOT_API_TOKEN           — токен для mod/api/bot.php (пользовательский)
+#   QMODS_ADMIN_BOT_API_TOKEN     — токен для mod/admin/bot.php (админский)
+#   YOOMONEY_NOTIFICATION_SECRET  — секрет из настроек HTTP-уведомлений кошелька ЮMoney, см. README «Оплата через ЮMoney»
 #
 # Обычные переменные (можно оставить в vars, значения не секретны):
 [vars]
@@ -49,3 +50,7 @@ BOT_USERNAME = "qmods_bot"
 # домен воркера отличается — иначе не покажется кнопка "Открыть в Mini App"
 # и не будут отправляться фото Киры (оба берут путь от этого URL).
 PUBLIC_URL = "https://update.qmurzik7.workers.dev"
+# Номер счёта кошелька ЮMoney (получатель платежей) — см. README «Оплата
+# через ЮMoney». Не секрет (это просто номер счёта), но обязателен для
+# оплаты — без него /pay/* ссылки будут вести на невалидный Quickpay-запрос.
+YOOMONEY_WALLET = "PASTE_YOOMONEY_WALLET_NUMBER_HERE"

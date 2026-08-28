@@ -208,6 +208,15 @@ export const APP_HTML = `<!doctype html>
   .pay-info { flex: 1; min-width: 0; }
   .pay-date { font-weight: 700; font-size: 13px; }
   .pay-amt { font-weight: 800; font-family: 'Unbounded', sans-serif; font-size: 14px; flex: none; }
+  .plan-row {
+    display: flex; justify-content: space-between; align-items: center; width: 100%;
+    padding: 12px 10px; border-bottom: 1px solid var(--card-border); background: none; border-left: none; border-right: none; border-top: none;
+    color: var(--text); text-align: left; cursor: pointer; border-radius: 10px; transition: background .12s;
+  }
+  .plan-row:active { background: rgba(255,255,255,.05); }
+  .plan-row:last-child { border-bottom: none; }
+  .plan-title { font-weight: 700; font-size: 14px; }
+  .plan-price { font-weight: 800; font-family: 'Unbounded', sans-serif; font-size: 15px; flex: none; margin-left: 10px; }
   .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
   .stat-tile { background: var(--bg2); border-radius: 14px; padding: 10px 8px; text-align: center; border: 1px solid var(--card-border); }
   .stat-tile b { display: block; font-size: 17px; font-weight: 800; }
@@ -635,20 +644,81 @@ function renderAch() {
 }
 
 function renderPay() {
-  var payments = me.payments || [];
-  var html = '<div class="card"><h3>' + hIcon('card') + 'История платежей</h3>';
-  if (payments.length === 0) {
-    html += '<p class="muted">Платежей пока не было.</p>';
-  } else {
-    payments.slice(0, 10).forEach(function (p) { html += payRow(p); });
-  }
-  html += '<a class="btn primary" href="' + SUBSCRIBE_URL + '" target="_blank">💳 Продлить подписку</a></div>';
-  document.getElementById('tab-pay').innerHTML = html;
+  var el = document.getElementById('tab-pay');
+  el.innerHTML = '<div class="skeleton"></div>';
+  api('plans', {}).then(function (res) {
+    var plans = (res && res.success && res.plans) || [];
+    var html = '<div class="card"><h3>' + hIcon('card') + 'Купить подписку</h3>';
+    if (plans.length === 0) {
+      html += '<p class="muted">Тарифы временно недоступны — попробуйте позже.</p>';
+    } else {
+      plans.forEach(function (p) {
+        html += '<button class="plan-row" onclick="buyPlan(' + jsStr(p.id) + ')">' +
+          '<div><div class="plan-title">' + esc(p.title) + '</div><div class="muted">' + p.days + ' дн.</div></div>' +
+          '<div class="plan-price">' + p.price + ' ₽</div></button>';
+      });
+      html += '<p class="muted" style="margin-top:10px">Оплата через ЮMoney — картой или с кошелька. Подписка активируется автоматически.</p>';
+    }
+    html += '</div><div id="payStatusCard"></div>';
+
+    var payments = me.payments || [];
+    html += '<div class="card"><h3>' + hIcon('card') + 'История платежей</h3>';
+    if (payments.length === 0) {
+      html += '<p class="muted">Платежей пока не было.</p>';
+    } else {
+      payments.slice(0, 10).forEach(function (p) { html += payRow(p); });
+    }
+    html += '<a class="btn" href="' + SUBSCRIBE_URL + '" target="_blank">🌐 Продлить на сайте</a></div>';
+
+    el.innerHTML = html;
+  });
 }
 
 function payRow(p) {
   return '<div class="pay-row"><div class="pay-dot"></div><div class="pay-info"><div class="pay-date">' + esc(p.date_text) + '</div><div class="muted">' + esc(p.plan) + '</div></div>' +
     '<div class="pay-amt">' + p.amount + ' ₽</div></div>';
+}
+
+var payPollTimer = null;
+
+function buyPlan(planId) {
+  haptic('light');
+  api('pay_start', { plan_id: planId }).then(function (res) {
+    if (!res || !res.success) { alert('Не удалось создать платёж' + (res && res.error ? ': ' + res.error : '')); return; }
+    if (tg && tg.openLink) { tg.openLink(res.url); } else { window.open(res.url, '_blank'); }
+    watchOrder(res.order_id);
+  });
+}
+
+// Polls pay_status after opening the payment link, so a paid order reflects
+// in the Mini App without the user needing to leave and come back — the
+// webhook (not this poll) is what actually grants the days; this only
+// notices and re-renders once it has.
+function watchOrder(orderId) {
+  var card = document.getElementById('payStatusCard');
+  if (card) card.innerHTML = '<div class="card"><p class="muted">⏳ Ожидаем подтверждение оплаты…</p></div>';
+  if (payPollTimer) clearInterval(payPollTimer);
+  var attempts = 0;
+  payPollTimer = setInterval(function () {
+    attempts++;
+    api('pay_status', { order_id: orderId }).then(function (res) {
+      if (res && res.success && res.status === 'paid') {
+        clearInterval(payPollTimer);
+        payPollTimer = null;
+        haptic('light');
+        api('me', {}).then(function (m) {
+          if (m && m.user) me = m.user;
+          renderPay();
+          var doneCard = document.getElementById('payStatusCard');
+          if (doneCard) doneCard.innerHTML = '<div class="card"><p>✅ Оплата подтверждена! Подписка «' + esc(res.plan) + '» активна.</p></div>';
+        });
+      } else if (attempts >= 20) {
+        clearInterval(payPollTimer);
+        payPollTimer = null;
+        if (card) card.innerHTML = '<div class="card"><p class="muted">Платёж пока не подтверждён. Если уже оплатили — откройте раздел «Оплата» ещё раз через минуту.</p></div>';
+      }
+    });
+  }, 3000);
 }
 
 function renderNotif() {

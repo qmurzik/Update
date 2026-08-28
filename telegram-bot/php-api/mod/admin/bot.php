@@ -324,6 +324,73 @@ if ($action === 'issue') {
 }
 
 // ============================================================
+// RECORD_PAYMENT — реальная оплата (ЮMoney через бота): продлевает
+// подписку И пишет запись в историю платежей (в отличие от `issue`,
+// который только продлевает — админские ручные грант-дни не оплата).
+// Вызывается ТОЛЬКО воркером после проверки sha1-подписи HTTP-уведомления
+// ЮMoney (см. worker/src/yoomoney.ts), никогда напрямую из бота/приложения.
+// ============================================================
+
+if ($action === 'record_payment') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $plan = req_string($request, 'plan');
+    $days = req_int($request, 'days');
+    $amount = (float)($request['amount'] ?? 0);
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+    if ($plan === '' || $days < 1 || $days > 3650 || $amount <= 0) {
+        bot_json(['success' => false, 'error' => 'Некорректные параметры оплаты.'], 400);
+    }
+
+    $finalExpiresAt = null;
+    $userId = '';
+    [$ok, $result] = update_users(function (array $users) use ($username, $plan, $days, $amount, &$finalExpiresAt, &$userId): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                $userId = (string)($user['id'] ?? '');
+                $currentExpiresAt = (int)($user['subscription']['expires_at'] ?? 0);
+                // Тот же принцип, что и в `issue`: отсчитываем от текущего
+                // окончания подписки, а не от "сейчас" — иначе оплата
+                // при ещё активной подписке стирает уже оплаченный остаток.
+                $base = max(time(), $currentExpiresAt);
+                $user['subscription']['plan'] = $plan;
+                $user['subscription']['expires_at'] = $base + ($days * 86400);
+                $finalExpiresAt = $user['subscription']['expires_at'];
+                if (!isset($user['payments']) || !is_array($user['payments'])) {
+                    $user['payments'] = [];
+                }
+                $user['payments'][] = ['plan' => $plan, 'amount' => $amount, 'date' => time()];
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'Пользователь не найден.']];
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (!empty($result['error'])) bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    $message = "Оплата принята. Подписка «{$plan}» продлена на {$days} дн. до " . date('d.m.Y', $finalExpiresAt);
+    log_action("Telegram bot payment: {$username} +{$days}d, {$amount} RUB ({$plan})");
+    // notification_id + user_id let the caller (the Worker, right after its
+    // own immediate confirmation message) ack this via ack_telegram_push so
+    // the 5-min cron doesn't deliver the same "оплата прошла" a second time
+    // — same fix as handleMessageInput's duplicate-delivery bug.
+    $notificationId = notify_user_event(strtolower($username), '💰 Оплата прошла успешно', $message);
+    notify_admin_payment_event(strtolower($username), $plan, $amount, $days);
+
+    bot_json(['success' => true, 'message' => $message, 'expires_at' => $finalExpiresAt, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+// ============================================================
 // REMOVE — снять подписку и устройство
 // ============================================================
 

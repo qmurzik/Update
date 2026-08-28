@@ -85,3 +85,25 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     created_at  INTEGER NOT NULL,
     last_seen   INTEGER
 );
+
+-- One row per "Купить подписку" attempt (bot inline buttons or the Mini
+-- App's "Оплата" tab) — see worker/src/yoomoney.ts and handlers/payment.ts.
+-- `id` doubles as the ЮMoney Quickpay `label` param, so the webhook can map
+-- an incoming HTTP-notification straight back to who/what/how-much without
+-- trusting anything the notification itself claims about the order.
+-- 'paid' is set exactly once (see markPaymentOrderPaid's guarded UPDATE) —
+-- ЮMoney retries its notification until it gets HTTP 200, so this is the
+-- idempotency guard against granting the same order's days twice.
+CREATE TABLE IF NOT EXISTS payment_orders (
+    id           TEXT PRIMARY KEY,
+    telegram_id  TEXT NOT NULL,
+    username     TEXT NOT NULL,
+    plan_id      TEXT NOT NULL,
+    plan_title   TEXT NOT NULL,
+    days         INTEGER NOT NULL,
+    amount       REAL NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending', -- pending | paid
+    operation_id TEXT,
+    created_at   INTEGER NOT NULL,
+    paid_at      INTEGER
+);

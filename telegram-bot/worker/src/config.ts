@@ -6,6 +6,8 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET: string;
   QMODS_BOT_API_TOKEN: string;
   QMODS_ADMIN_BOT_API_TOKEN: string;
+  /** Shared secret from the wallet's "HTTP-уведомления" settings on yoomoney.ru — verifies webhook authenticity (see yoomoney.ts). */
+  YOOMONEY_NOTIFICATION_SECRET: string;
 
   // Vars (wrangler.toml)
   QMODS_API_BASE: string;
@@ -13,6 +15,8 @@ export interface Env {
   QMODS_SUBSCRIBE_URL: string;
   QMODS_SUPPORT_URL: string;
   ADMIN_TELEGRAM_IDS: string;
+  /** ЮMoney wallet account number (the Quickpay `receiver`) — not secret, just an account id, but wrong/unset breaks payment links, so it's explicit config. */
+  YOOMONEY_WALLET: string;
   /** Bot's @username (no leading @), e.g. "qmods_bot" — used to build t.me deep links (device pairing, /start link_...). */
   BOT_USERNAME: string;
   /**

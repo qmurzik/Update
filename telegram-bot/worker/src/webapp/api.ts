@@ -1,8 +1,9 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
-import { checkRateLimit, revokeDeviceToken } from '../db';
+import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken } from '../db';
 import { reportError } from '../errorReport';
+import { buildQuickpayUrl } from '../yoomoney';
 import { extractInitData, validateInitData } from './validate';
 
 const LINK_RATE_MAX = 6;
@@ -109,6 +110,48 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
       const rating = Number(body.rating ?? 0);
       const text = String(body.text ?? '');
       return json(await api.reviewAdd(telegramId, rating, text));
+    }
+
+    case 'plans':
+      return json(await api.plans());
+
+    // Creates a payment_orders row + ЮMoney Quickpay URL — mirrors the chat
+    // bot's handleBuyPlan (handlers/payment.ts), same order flow, same
+    // webhook. The Worker (not this endpoint) grants the days once the
+    // webhook confirms payment — this only ever hands back a link to open.
+    case 'pay_start': {
+      const me = await api.me(telegramId);
+      if (!me.linked || !me.user) return json({ success: false, error: 'Not linked' }, 403);
+
+      const plansRes = await api.plans();
+      const planId = String(body.plan_id ?? '');
+      const plan = (plansRes.plans ?? []).find((p) => p.id === planId);
+      if (!plan) return json({ success: false, error: 'Тариф не найден' }, 404);
+
+      const orderId = await createPaymentOrder(env, {
+        telegramId,
+        username: me.user.username,
+        planId: plan.id,
+        planTitle: plan.title,
+        days: plan.days,
+        amount: plan.price,
+      });
+      const url = buildQuickpayUrl(env, {
+        orderId,
+        amount: plan.price,
+        description: `QMods — ${plan.title}`,
+        successUrl: `https://t.me/${env.BOT_USERNAME}?start=paid_${orderId}`,
+      });
+      return json({ success: true, order_id: orderId, url });
+    }
+
+    // Polled by the webapp after the user returns from the ЮMoney page —
+    // the webhook is what actually grants anything, this just reports it.
+    case 'pay_status': {
+      const orderId = String(body.order_id ?? '');
+      const order = await getPaymentOrder(env, orderId);
+      if (!order) return json({ success: false, error: 'Order not found' }, 404);
+      return json({ success: true, status: order.status, plan: order.plan_title, days: order.days, amount: order.amount });
     }
 
     // ============================================================

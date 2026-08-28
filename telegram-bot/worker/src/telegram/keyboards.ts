@@ -52,13 +52,32 @@ export const reviewStarsKeyboard = (hasExisting: boolean): InlineKeyboard => {
 };
 
 export const subscriptionKeyboard = (env: Env): InlineKeyboard => [
-  [{ text: '💳 Продлить подписку', url: env.QMODS_SUBSCRIBE_URL }],
+  [{ text: '💳 Купить/продлить в боте', callback_data: 'pay:plans' }],
+  [{ text: '🌐 Страница оплаты на сайте', url: env.QMODS_SUBSCRIBE_URL }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 
-export const paymentsKeyboard = (env: Env): InlineKeyboard => [
-  [{ text: '💳 Продлить подписку', url: env.QMODS_SUBSCRIBE_URL }],
-  [{ text: '‹ Назад', callback_data: 'm:main' }],
+// "Подписка" and "Оплата" are different sections but there's no reason for
+// their keyboards to diverge — was two identical function bodies before.
+export const paymentsKeyboard = subscriptionKeyboard;
+
+export interface PlanRow {
+  id: string;
+  title: string;
+  price: number;
+  days: number;
+}
+
+export const planPickerKeyboard = (plans: PlanRow[]): InlineKeyboard => {
+  const kb: InlineKeyboard = plans.map((p) => [{ text: `${p.title} — ${p.price} ₽ / ${p.days} дн.`, callback_data: `pay:plan:${p.id}` }]);
+  kb.push([{ text: '‹ Назад', callback_data: 'm:pay' }]);
+  return kb;
+};
+
+export const payOrderKeyboard = (url: string, orderId: string): InlineKeyboard => [
+  [{ text: '💳 Оплатить', url }],
+  [{ text: '🔄 Проверить оплату', callback_data: `pay:check:${orderId}` }],
+  [{ text: '‹ Назад', callback_data: 'm:pay' }],
 ];
 
 export const devicesKeyboard = (hasDevice: boolean): InlineKeyboard => {
