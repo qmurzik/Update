@@ -6,7 +6,16 @@ import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
-import { checkRateLimit, createDevicePairing, getChatIdByUsername, getDevicePairing, getPaymentOrder, getUsernameByDeviceToken, markPaymentOrderPaid } from './db';
+import {
+  checkRateLimit,
+  createDevicePairing,
+  getChatIdByUsername,
+  getDevicePairing,
+  getPaymentOrder,
+  getUsernameByDeviceToken,
+  markPaymentOrderPaid,
+  revokeDeviceTokensForUsername,
+} from './db';
 import type { PaymentOrderRow } from './db';
 import type { InlineKeyboard, TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
@@ -243,6 +252,70 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
       notifications: res.notifications ?? [],
       force_update: res.force_update ?? { required: false, message: '' },
     });
+  }
+
+  // Self-service "log out" from inside the app — see android-client/README.md
+  // "Отвязка устройства из приложения". Best-effort: an unknown/already-dead
+  // token still returns success (that's the caller's desired end state
+  // either way), and D1 revocation always happens even if the qmods.ru
+  // mirror call below fails — the D1 device_tokens row is what actually
+  // gates /device/subscription, the site's own device_id field is only a
+  // best-effort mirror for the bot's/cabinet's "Устройства" section.
+  if (url.pathname === '/device/unlink' && request.method === 'POST') {
+    const token = url.searchParams.get('token') ?? '';
+    if (!token) return jsonResponse({ success: false, error: 'Missing token' }, 400);
+
+    const allowed = await checkRateLimit(env, `device-unlink:${token}`, 10, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    const username = await getUsernameByDeviceToken(env, token);
+    if (!username) return jsonResponse({ success: true, already_unlinked: true });
+
+    await revokeDeviceTokensForUsername(env, username);
+    const api = new QmodsUserApi(env);
+    await api.deviceRemoveByUsername(username).catch((err) => console.error('device unlink: qmods.ru mirror failed', username, err));
+
+    return jsonResponse({ success: true });
+  }
+
+  // Android crash reports (see android-client's CrashHandler/CrashReportRunnable)
+  // — forwarded through the same admin-alert channel as the Worker's own
+  // hidden errors (errorReport.ts), deduped by exception type + message +
+  // top stack frame ONLY (not device/version/username, which vary per hit
+  // of the very same crash — see reportError's signatureOverride param),
+  // so one bad release doesn't flood admins with one alert per user.
+  if (url.pathname === '/device/crash' && request.method === 'POST') {
+    const allowed = await checkRateLimit(env, `device-crash:${clientIp(request)}`, 10, 600);
+    if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
+
+    let body: { name?: unknown; message?: unknown; stack?: unknown; device?: unknown; version_name?: unknown; version_code?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return jsonResponse({ success: false, error: 'Invalid JSON' }, 400);
+    }
+
+    const name = String(body.name ?? 'Error').slice(0, 200);
+    const message = String(body.message ?? '').slice(0, 500);
+    const stack = String(body.stack ?? '').slice(0, 4000);
+    const device = String(body.device ?? '').slice(0, 100);
+    const versionName = String(body.version_name ?? '').slice(0, 50);
+    const versionCode = Number(body.version_code ?? 0) || 0;
+
+    const token = url.searchParams.get('token') ?? '';
+    const username = token ? await getUsernameByDeviceToken(env, token) : null;
+
+    const topFrame = (stack.split('\n')[0] ?? '').trim().slice(0, 200);
+    const signature = `android-crash|${name}|${message}|${topFrame}`.slice(0, 500);
+
+    const syntheticError = new Error(message);
+    syntheticError.name = name;
+    syntheticError.stack = `${name}: ${message}\n${stack}`;
+
+    const context = `android crash (${device || 'unknown device'}, v${versionName || '?'}/${versionCode}${username ? `, ${username}` : ''})`;
+    ctx.waitUntil(reportError(env, syntheticError, context, signature));
+
+    return jsonResponse({ success: true });
   }
 
   // ============================================================

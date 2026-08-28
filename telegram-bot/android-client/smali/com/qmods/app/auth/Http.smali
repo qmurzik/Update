@@ -97,6 +97,73 @@
     return-object v3
 .end method
 
+# JSON-body POST — used by CrashReportRunnable. Shorter timeouts (3s) than
+# get()/post() (15s) since this always runs from a crash-handler background
+# thread that's only given a brief, bounded window before the process may
+# terminate anyway (see CrashHandler.uncaughtException).
+.method public static postJson(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+    .locals 6
+    .param p0, "urlStr"    # Ljava/lang/String;
+    .param p1, "jsonBody"    # Ljava/lang/String;
+    .annotation system Ldalvik/annotation/Throws;
+        value = {
+            Ljava/io/IOException;
+        }
+    .end annotation
+
+    new-instance v0, Ljava/net/URL;
+
+    invoke-direct {v0, p0}, Ljava/net/URL;-><init>(Ljava/lang/String;)V
+
+    invoke-virtual {v0}, Ljava/net/URL;->openConnection()Ljava/net/URLConnection;
+
+    move-result-object v1
+
+    check-cast v1, Ljava/net/HttpURLConnection;
+
+    const-string v2, "POST"
+
+    invoke-virtual {v1, v2}, Ljava/net/HttpURLConnection;->setRequestMethod(Ljava/lang/String;)V
+
+    const-string v2, "Content-Type"
+
+    const-string v3, "application/json; charset=utf-8"
+
+    invoke-virtual {v1, v2, v3}, Ljava/net/HttpURLConnection;->setRequestProperty(Ljava/lang/String;Ljava/lang/String;)V
+
+    const/4 v2, 0x1
+
+    invoke-virtual {v1, v2}, Ljava/net/HttpURLConnection;->setDoOutput(Z)V
+
+    const/16 v2, 0xbb8    # 3000ms
+
+    invoke-virtual {v1, v2}, Ljava/net/HttpURLConnection;->setConnectTimeout(I)V
+
+    invoke-virtual {v1, v2}, Ljava/net/HttpURLConnection;->setReadTimeout(I)V
+
+    invoke-virtual {v1}, Ljava/net/HttpURLConnection;->getOutputStream()Ljava/io/OutputStream;
+
+    move-result-object v3
+
+    const-string v4, "UTF-8"
+
+    invoke-virtual {p1, v4}, Ljava/lang/String;->getBytes(Ljava/lang/String;)[B
+
+    move-result-object v5
+
+    invoke-virtual {v3, v5}, Ljava/io/OutputStream;->write([B)V
+
+    invoke-virtual {v3}, Ljava/io/OutputStream;->close()V
+
+    invoke-static {v1}, Lcom/qmods/app/auth/Http;->readBody(Ljava/net/HttpURLConnection;)Ljava/lang/String;
+
+    move-result-object v5
+
+    invoke-virtual {v1}, Ljava/net/HttpURLConnection;->disconnect()V
+
+    return-object v5
+.end method
+
 # Reads getInputStream() on 2xx, getErrorStream() otherwise (so a 429/401/500
 # JSON error body from the Worker is still readable instead of throwing),
 # decodes as UTF-8. Returns "" for a null stream.

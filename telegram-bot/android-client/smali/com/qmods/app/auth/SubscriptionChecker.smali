@@ -90,6 +90,36 @@
     return-void
 .end method
 
+# Self-service "log out" from inside the app — e.g. a "Выйти" button on your
+# main screen. Best-effort tells the Worker to revoke the device_token
+# server-side (POST /device/unlink), then ALWAYS wipes the local token
+# afterward regardless of whether that network call succeeded, so the user
+# can log out even while offline — a stray still-valid token server-side
+# just gets caught by the very next /device/subscription check (revoked:
+# true) if it's ever reused. onDone runs on the main thread once finished;
+# have it navigate to your pairing screen (or call DevicePairing.startPairing()).
+.method public static unlink(Landroid/content/Context;Ljava/lang/Runnable;)V
+    .locals 3
+    .param p0, "context"    # Landroid/content/Context;
+    .param p1, "onDone"    # Ljava/lang/Runnable;
+
+    invoke-virtual {p0}, Landroid/content/Context;->getApplicationContext()Landroid/content/Context;
+
+    move-result-object v0
+
+    new-instance v1, Lcom/qmods/app/auth/UnlinkRunnable;
+
+    invoke-direct {v1, v0, p1}, Lcom/qmods/app/auth/UnlinkRunnable;-><init>(Landroid/content/Context;Ljava/lang/Runnable;)V
+
+    new-instance v2, Ljava/lang/Thread;
+
+    invoke-direct {v2, v1}, Ljava/lang/Thread;-><init>(Ljava/lang/Runnable;)V
+
+    invoke-virtual {v2}, Ljava/lang/Thread;->start()V
+
+    return-void
+.end method
+
 .method public static check(Landroid/content/Context;Lcom/qmods/app/auth/SubscriptionCallback;)V
     .locals 3
     .param p0, "context"    # Landroid/content/Context;

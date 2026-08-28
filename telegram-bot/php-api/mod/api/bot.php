@@ -528,6 +528,40 @@ if ($action === 'device_remove') {
 }
 
 // ============================================================
+// DEVICE_REMOVE_BY_USERNAME — то же самое, но по username вместо
+// telegram_id. Вызывается ТОЛЬКО воркером — из самостоятельной отвязки
+// устройства ПРЯМО ИЗ ПРИЛОЖЕНИЯ (POST /device/unlink), где известен
+// только device_token -> username (D1), а не telegram_id аккаунта (тот же
+// паттерн, что и у device_subscription). Не трогает D1 device_tokens —
+// это только зеркало на стороне qmods.ru для разделов "Устройства" в
+// боте/кабинете; фактическую отзыв делает воркер отдельно.
+// ============================================================
+
+if ($action === 'device_remove_by_username') {
+    $username = trim((string)($req['username'] ?? ''));
+    if ($username === '') {
+        bot_json(['success' => false, 'error' => 'Invalid username'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($username): array {
+        foreach ($users as &$u) {
+            if (strtolower((string)($u['username'] ?? '')) !== strtolower($username)) continue;
+            $u['device_id'] = '';
+            unset($u['device_name'], $u['device_android'], $u['device_added_at']);
+            return [$users, ['success' => true]];
+        }
+        unset($u);
+        return [$users, ['error' => 'Not found']];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Storage error'], 500);
+    if (($result['error'] ?? '') !== '') bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    log_action('Bot device_remove_by_username: ' . $username);
+    bot_json(['success' => true]);
+}
+
+// ============================================================
 // DEVICE_REGISTER — привязывает device_id к аккаунту по telegram_id.
 // Вызывается ТОЛЬКО воркером — из хендшейка device-auth для нативного
 // приложения (см. worker/src/handlers/devicePair.ts), сразу после

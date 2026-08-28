@@ -163,6 +163,15 @@ android-client/README.md «Проверка во время использова
 оно авторизовано — оно знает только `device_token`, который резолвится в
 `username` на самом воркере (`GET /device/subscription`).
 
+### `device_remove_by_username` (POST)
+**Параметры:** `username`. То же самое, что `device_remove`, но по
+`username` вместо `telegram_id` — server-to-server вызов с воркера, для
+самостоятельной отвязки устройства прямо из приложения (`POST
+/device/unlink?token=...` на воркере — резолвит `device_token` в
+`username` через D1, отзывает там же и зеркалит очистку `device_id` сюда
+best-effort). См. `android-client/README.md` «Отвязка устройства из
+приложения».
+
 ### `device_register` (POST)
 **Параметры:** `telegram_id`, `device_id`. Тоже только server-to-server —
 вызывается воркером сразу после успешной привязки приложения через бота

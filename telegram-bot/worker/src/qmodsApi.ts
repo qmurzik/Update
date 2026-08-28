@@ -114,6 +114,16 @@ export class QmodsUserApi {
     return callApi(this.url, this.token, 'device_register', { telegram_id: telegramId, device_id: deviceId }, 'POST');
   }
 
+  /**
+   * Same as deviceRemove(), but keyed by username instead of telegram_id —
+   * used by the self-service in-app "log out" (POST /device/unlink), which
+   * only knows the device_token -> username mapping (D1), not the account's
+   * telegram_id. See mod/api/bot.php `device_remove_by_username`.
+   */
+  deviceRemoveByUsername(username: string) {
+    return callApi(this.url, this.token, 'device_remove_by_username', { username }, 'POST');
+  }
+
   notifications(telegramId: string) {
     return callApi<{ notifications: Array<{ id: string; title: string; message: string; created_at: number; unread: boolean }> }>(
       this.url,

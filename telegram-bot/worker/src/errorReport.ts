@@ -27,10 +27,18 @@ async function sha256Hex(text: string): Promise<string> {
  *
  * Never throws — the reporting path failing must not cascade into more
  * unhandled failures, so any error here is swallowed after a local log.
+ *
+ * signatureOverride lets a caller decouple "what counts as the same error"
+ * from `context` — used by the Android crash-report route (/device/crash):
+ * context there carries per-report details (device model, app version,
+ * username) for the alert TEXT, which would otherwise make every user's
+ * hit of the very same crash dedupe as a separate signature. Omit it for
+ * the normal case (Worker-side errors), where context IS the right thing
+ * to dedupe on.
  */
-export async function reportError(env: Env, error: unknown, context: string): Promise<void> {
+export async function reportError(env: Env, error: unknown, context: string, signatureOverride?: string): Promise<void> {
   try {
-    const hash = await sha256Hex(signatureOf(error, context));
+    const hash = await sha256Hex(signatureOverride ?? signatureOf(error, context));
     const now = Date.now();
 
     const row = await env.DB.prepare('SELECT last_sent_at, count FROM error_alerts WHERE signature = ?')
