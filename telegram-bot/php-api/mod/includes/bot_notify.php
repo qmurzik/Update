@@ -368,6 +368,75 @@ function render_site_auth_gate_block(): void
 }
 
 /**
+ * "Обновите приложение" — для device_id-флоу СТАРОГО приложения
+ * (login.php/register.php открываются внутри WebView старой сборки), когда
+ * site_auth_gate выключен. Старое приложение умеет входить/регистрироваться
+ * ТОЛЬКО через сайт — его нельзя просто отрезать как обычный браузер
+ * (render_site_auth_gate_block), поэтому здесь другое сообщение: не "идите
+ * в бота", а "обновите приложение" (ссылка та же, что и в собственном
+ * page_update() логина, и в GateActivity нового приложения).
+ *
+ * Если передан $user — это значит вызывающий код уже нашёл активный
+ * аккаунт по device_id (ветка автологина в login.php) И УЖЕ установил
+ * сессию для него — эта функция сессию не трогает и не разлогинивает,
+ * только не даёт запросу уйти дальше в app_callback.php. Раз человек и так
+ * уже авторизован — сразу же показываем код/диплинк привязки Telegram (та
+ * же механика, что cabinet.php::create_telegram_link), чтобы он успел
+ * привязать аккаунт, пока ещё сидит в устаревшем приложении. Один и тот же
+ * непросроченный код переиспользуется при повторных заходах на этот экран
+ * вместо того чтобы плодить новый на каждую перезагрузку страницы.
+ */
+function render_update_required_block(?array $user = null): void
+{
+    $linkSection = '';
+    if ($user !== null) {
+        $userId = (string)($user['id'] ?? '');
+        $code = strtoupper(trim((string)($user['telegram_link_code'] ?? '')));
+        $expires = (int)($user['telegram_link_expires'] ?? 0);
+
+        if ($userId !== '' && ($code === '' || $expires < time())) {
+            $code = strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));
+            $expires = time() + 600;
+            update_users(function (array $users) use ($userId, $code, $expires): array {
+                foreach ($users as &$u) {
+                    if (($u['id'] ?? '') !== $userId) continue;
+                    $u['telegram_link_code'] = $code;
+                    $u['telegram_link_expires'] = $expires;
+                    break;
+                }
+                unset($u);
+                return [$users, null];
+            });
+        }
+
+        if ($code !== '') {
+            $username = htmlspecialchars((string)($user['username'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $deepLink = 'https://t.me/qmods_bot?start=link_' . $code;
+            $linkSection =
+                '<div style="margin-top:20px;padding-top:20px;border-top:1px solid #1b2333">'
+                . '<div class="d" style="margin-bottom:12px">Аккаунт <b style="color:#f1f5f9">' . $username . '</b> ещё активен. '
+                . 'Привяжите Telegram сейчас, чтобы не потерять доступ после обновления:</div>'
+                . '<a href="' . $deepLink . '" style="background:#3157ff">Открыть бота и привязать</a>'
+                . '<div class="d" style="margin-top:12px">Или введите код в боте вручную: '
+                . '<b style="color:#9db4ff;letter-spacing:2px">' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '</b> (10 минут)</div>'
+                . '</div>';
+        }
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<style>body{margin:0;background:#050508;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}'
+        . '.b{text-align:center;padding:24px;max-width:420px}.i{font-size:56px}.t{font-size:18px;font-weight:700;margin:12px 0}'
+        . '.d{color:#94a3b8;font-size:14px;line-height:1.6}a{display:inline-block;margin-top:16px;padding:12px 24px;background:#6366f1;color:#fff;border-radius:12px;text-decoration:none;font-weight:600}</style>'
+        . '</head><body><div class="b"><div class="i">⬇️</div><div class="t">Требуется обновление приложения</div>'
+        . '<div class="d">Эта версия приложения больше не поддерживается. Обновите его, чтобы продолжить пользоваться QMods.</div>'
+        . '<a href="https://qmods.ru/mod/download.php">Скачать новую версию</a>'
+        . $linkSection
+        . '</div></body></html>';
+    exit;
+}
+
+/**
  * Админский алерт "кто/когда/что купил" — отдельная очередь от персональных
  * уведомлений пользователя (data/admin_payment_alerts.json, не
  * notifications.json), т.к. это НЕ предназначено для получателя-покупателя:
