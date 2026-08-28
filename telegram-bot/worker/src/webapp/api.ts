@@ -1,6 +1,6 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
-import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
+import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
 import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken } from '../db';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
@@ -164,7 +164,15 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
     case 'admin_issue':
     case 'admin_remove':
     case 'admin_delete_user':
-    case 'admin_send_notification': {
+    case 'admin_send_notification':
+    case 'admin_get_app_version':
+    case 'admin_set_app_version':
+    case 'admin_get_site_auth_gate':
+    case 'admin_set_site_auth_gate':
+    case 'admin_get_app_release':
+    case 'admin_set_app_release':
+    case 'admin_generate_apk_share_link':
+    case 'admin_revoke_apk_share_link': {
       if (!userIsAdmin) return json({ success: false, error: 'Forbidden' }, 403);
       return handleAdminAction(action, body, env);
     }
@@ -201,7 +209,66 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
       return json(await adminApi.sendNotification(String(body.title ?? ''), String(body.message ?? ''), target));
     }
 
+    case 'admin_get_app_version':
+      return json(await adminApi.getAppVersion());
+
+    case 'admin_set_app_version':
+      return json(await adminApi.setAppVersion(Number(body.min_version_code ?? 0), String(body.message ?? '')));
+
+    case 'admin_get_site_auth_gate':
+      return json(await adminApi.getSiteAuthGate());
+
+    case 'admin_set_site_auth_gate':
+      return json(await adminApi.setSiteAuthGate(!!body.enabled));
+
+    case 'admin_get_app_release':
+      return json(await adminApi.getAppRelease());
+
+    case 'admin_set_app_release':
+      return json(await adminApi.setAppRelease(String(body.version ?? ''), String(body.changelog ?? '')));
+
+    case 'admin_generate_apk_share_link':
+      return json(await adminApi.generateApkShareLink());
+
+    case 'admin_revoke_apk_share_link':
+      return json(await adminApi.revokeApkShareLink());
+
     default:
       return json({ success: false, error: 'Unknown action' }, 400);
   }
+}
+
+/**
+ * POST /app/api/apk — separate from the JSON-only /app/api above because
+ * this body IS the file (raw bytes), same convention as the chat bot's
+ * apk_upload flow (see qmodsApi.ts uploadApkBinary). Unlike a Telegram
+ * document upload, a browser file input has no 20MB cap here — this is a
+ * plain HTTPS POST, not routed through the Bot API's getFile.
+ */
+export async function handleWebAppApkUpload(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'POST') {
+    return json({ success: false, error: 'Method not allowed' }, 405);
+  }
+
+  const initData = extractInitData(request.headers.get('Authorization'));
+  if (!initData) return json({ success: false, error: 'Missing Authorization' }, 401);
+
+  const validated = await validateInitData(initData, env.TELEGRAM_BOT_TOKEN);
+  if (!validated) return json({ success: false, error: 'Invalid or expired initData' }, 401);
+
+  if (!isAdmin(env, String(validated.user.id))) {
+    return json({ success: false, error: 'Forbidden' }, 403);
+  }
+
+  const filenameHeader = request.headers.get('X-Apk-Filename') ?? '';
+  let filename = 'app.apk';
+  try {
+    filename = filenameHeader ? decodeURIComponent(filenameHeader) : filename;
+  } catch {
+    // malformed encoding — keep the fallback name, the bytes still upload fine
+  }
+
+  const bytes = await request.arrayBuffer();
+  const res = await uploadApkBinary(env, bytes, filename);
+  return json(res);
 }

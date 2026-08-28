@@ -19,7 +19,7 @@ import {
 import type { PaymentOrderRow } from './db';
 import type { InlineKeyboard, TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
-import { handleWebAppApi } from './webapp/api';
+import { handleWebAppApi, handleWebAppApkUpload } from './webapp/api';
 import { renderDownloadPage } from './webapp/downloadPage';
 import { parseNotification, verifyNotificationSignature } from './yoomoney';
 
@@ -113,14 +113,16 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     // about:blank when PUBLIC_URL isn't set yet — the onerror handlers on
     // each <img> hide it cleanly rather than showing a broken-image icon.
     const img = (name: string) => kiraImage(env, name) ?? 'about:blank';
-    const html = APP_HTML.replaceAll('__SUBSCRIBE_URL__', env.QMODS_SUBSCRIBE_URL)
-      .replaceAll('__KIRA_HERO__', img('kira-hero.webp'))
+    const html = APP_HTML.replaceAll('__KIRA_HERO__', img('kira-hero.webp'))
       .replaceAll('__KIRA_LOADING__', img('kira-loading.webp'))
       .replaceAll('__KIRA_EMPTY__', img('kira-empty.webp'));
     return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
   if (url.pathname === '/app/api') {
     return handleWebAppApi(request, env);
+  }
+  if (url.pathname === '/app/api/apk') {
+    return handleWebAppApkUpload(request, env);
   }
 
   // The "pretty" public APK download page — a stable URL admins generate

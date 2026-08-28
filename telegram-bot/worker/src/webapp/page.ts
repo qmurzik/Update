@@ -243,6 +243,7 @@ export const APP_HTML = `<!doctype html>
     width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--card-border);
     background: var(--bg2); color: var(--text); font-size: 14px; margin-bottom: 8px;
   }
+  .admin-form input[type=file] { display: block; width: 100%; font-size: 13px; color: var(--hint); margin-bottom: 8px; }
   .mascot { width: 190px; max-width: 62vw; margin-bottom: 14px; filter: drop-shadow(0 14px 32px rgba(124,58,237,.45)); animation: float 3.6s ease-in-out infinite; }
   .mascot-sm { width: 120px; max-width: 44vw; margin: 4px auto 10px; display: block; opacity: .92; filter: drop-shadow(0 8px 20px rgba(124,58,237,.3)); }
   @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
@@ -307,7 +308,6 @@ if (tg && tg.onEvent) tg.onEvent('themeChanged', function () {
   document.body.classList.toggle('light-theme', tg.colorScheme === 'light');
 });
 var initData = tg ? tg.initData : '';
-var SUBSCRIBE_URL = '__SUBSCRIBE_URL__';
 var me = null;
 var isAdminUser = false;
 
@@ -348,7 +348,9 @@ var ICONS = {
   bell: { d: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path>' },
   stats: { d: '<path d="M4 20V10"></path><path d="M11 20V4"></path><path d="M18 20v-7"></path>' },
   card: { d: '<rect x="2.5" y="5" width="19" height="14" rx="2.5"></rect><path d="M2.5 9.5h19"></path>' },
-  send: { d: '<polygon points="22 2 15 22 11 13 2 9"></polygon>', fill: true }
+  send: { d: '<polygon points="22 2 15 22 11 13 2 9"></polygon>', fill: true },
+  lock: { d: '<rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path>' },
+  box: { d: '<path d="M3.3 7.5 12 12l8.7-4.5M12 21.5V12M20.7 7.5v9L12 21.5 3.3 16.5v-9L12 2.5z"></path>' }
 };
 function hIcon(name) {
   var ic = ICONS[name];
@@ -468,7 +470,7 @@ function switchTab(name) {
 function updateMainButton(name) {
   if (!tg || !tg.MainButton) return;
   tg.MainButton.offClick(mainButtonClick);
-  if (name === 'sub' || name === 'pay') {
+  if (name === 'sub') {
     tg.MainButton.setText('💳 Продлить подписку');
     tg.MainButton.onClick(mainButtonClick);
     tg.MainButton.show();
@@ -476,8 +478,11 @@ function updateMainButton(name) {
     tg.MainButton.hide();
   }
 }
+// Всё покупается прямо здесь — просто переключает на вкладку "Оплата"
+// (pay_start/pay_status, тот же ЮMoney-флоу, что и у чат-бота), сайт
+// вообще не нужен для оплаты.
 function mainButtonClick() {
-  if (tg.openLink) tg.openLink(SUBSCRIBE_URL); else window.open(SUBSCRIBE_URL, '_blank');
+  switchTab('pay');
 }
 
 function renderProfile() {
@@ -498,7 +503,8 @@ function renderProfile() {
 
 function openApp() {
   api('app_release', {}).then(function (res) {
-    var url = (res && (res.download_url || res.cabinet_url)) || SUBSCRIBE_URL;
+    var url = res && (res.download_url || res.cabinet_url);
+    if (!url) { alert('Файл приложения сейчас недоступен.'); return; }
     if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
   });
 }
@@ -668,7 +674,7 @@ function renderPay() {
     } else {
       payments.slice(0, 10).forEach(function (p) { html += payRow(p); });
     }
-    html += '<a class="btn" href="' + SUBSCRIBE_URL + '" target="_blank">🌐 Продлить на сайте</a></div>';
+    html += '</div>';
 
     el.innerHTML = html;
   });
@@ -748,8 +754,11 @@ var adminUsers = [];
 function renderAdmin() {
   var el = document.getElementById('tab-admin');
   el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
-  Promise.all([api('admin_stats', {}), api('admin_users', {})]).then(function (results) {
-    var sRes = results[0], uRes = results[1];
+  Promise.all([
+    api('admin_stats', {}), api('admin_users', {}),
+    api('admin_get_app_version', {}), api('admin_get_site_auth_gate', {}), api('admin_get_app_release', {})
+  ]).then(function (results) {
+    var sRes = results[0], uRes = results[1], avRes = results[2], sagRes = results[3], relRes = results[4];
     var stats = (sRes && sRes.stats) || {};
     adminUsers = (uRes && uRes.users) || [];
 
@@ -773,8 +782,148 @@ function renderAdmin() {
       '<textarea id="bcText" rows="3" placeholder="Текст рассылки"></textarea>' +
       '<button class="btn primary" onclick="sendBroadcast()">📣 Отправить всем привязанным</button></div>';
 
+    html += appReleaseCard(relRes);
+    html += appVersionCard(avRes);
+    html += siteAuthGateCard(sagRes);
+
     el.innerHTML = html;
     renderUserList(adminUsers);
+  });
+}
+
+function fmtBytes(n) {
+  if (!n) return '';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+
+/**
+ * "📦 Приложение (APK)" — mirrors the chat bot's "📦 Приложение (APK)"
+ * screen (handlers/admin.ts showAppManager), same backend actions, but the
+ * upload here goes through a plain HTTPS POST (see uploadApk() below), not
+ * Telegram's Bot API — no 20MB cap, works for a real full-size build.
+ */
+function appReleaseCard(res) {
+  var r = res || {};
+  var status = (r.has_file ? '✅ загружен' + (r.apk_size ? ' (' + fmtBytes(r.apk_size) + ')' : '') : '⛔ не загружен') +
+    ' · ссылка: ' + (r.share_enabled ? '🟢 активна' : '🔴 выключена');
+  var html = '<div class="card"><h3>' + hIcon('box') + 'Приложение (APK)</h3>' +
+    '<p class="muted">Версия: <b>' + esc(r.version || '—') + '</b> · ' + status + '</p>' +
+    '<div class="admin-form">' +
+    '<input type="text" id="relVersion" placeholder="Версия, например 2.4.1" value="' + esc(r.version || '') + '">' +
+    '<textarea id="relChangelog" rows="3" placeholder="Что нового">' + esc(r.changelog || '') + '</textarea>' +
+    '<button class="btn primary" onclick="saveAppRelease()">Сохранить версию и описание</button>' +
+    '</div>' +
+    '<div class="admin-form">' +
+    '<input type="file" id="apkFile" accept=".apk,application/vnd.android.package-archive">' +
+    '<button class="btn" onclick="uploadApk()">📤 Загрузить APK</button>' +
+    '<p id="apkProgress" class="muted"></p>' +
+    '</div>' +
+    '<div class="admin-form">';
+  if (r.has_file) {
+    html += r.share_enabled
+      ? '<button class="btn danger" onclick="revokeApkShare()">🚫 Отключить публичную ссылку</button>'
+      : '<button class="btn primary" onclick="generateApkShare()">🔗 Создать публичную ссылку</button>';
+  }
+  if (r.download_url) {
+    html += '<a class="btn" href="' + esc(r.download_url) + '" target="_blank">🌐 Открыть ссылку</a>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function saveAppRelease() {
+  var version = document.getElementById('relVersion').value.trim();
+  var changelog = document.getElementById('relChangelog').value.trim();
+  if (!version) { alert('Укажите версию.'); return; }
+  api('admin_set_app_release', { version: version, changelog: changelog }).then(function (res) {
+    if (!res.success) { alert(res.error || 'Ошибка'); return; }
+    haptic('medium'); loaded.admin = false; switchTab('admin');
+  });
+}
+
+function generateApkShare() {
+  api('admin_generate_apk_share_link', {}).then(function (res) {
+    if (!res.success) { alert(res.error || 'Ошибка'); return; }
+    haptic('medium'); loaded.admin = false; switchTab('admin');
+  });
+}
+
+function revokeApkShare() {
+  api('admin_revoke_apk_share_link', {}).then(function () {
+    haptic('medium'); loaded.admin = false; switchTab('admin');
+  });
+}
+
+function uploadApk() {
+  var input = document.getElementById('apkFile');
+  var file = input.files[0];
+  var prog = document.getElementById('apkProgress');
+  if (!file) { alert('Выберите файл .apk'); return; }
+  if (!/\.apk$/i.test(file.name)) { alert('Нужен файл с расширением .apk'); return; }
+
+  prog.textContent = 'Загрузка: 0%';
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/app/api/apk', true);
+  xhr.setRequestHeader('Authorization', 'tma ' + initData);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.setRequestHeader('X-Apk-Filename', encodeURIComponent(file.name));
+  xhr.upload.onprogress = function (e) {
+    if (e.lengthComputable) prog.textContent = 'Загрузка: ' + Math.round((e.loaded / e.total) * 100) + '%';
+  };
+  xhr.onload = function () {
+    var res = null;
+    try { res = JSON.parse(xhr.responseText); } catch (e) {}
+    if (res && res.success) {
+      haptic('medium');
+      prog.textContent = '✅ Загружено: ' + fmtBytes(res.size || file.size);
+      loaded.admin = false;
+      setTimeout(function () { switchTab('admin'); }, 700);
+    } else {
+      prog.textContent = '';
+      alert((res && res.error) || 'Ошибка загрузки');
+    }
+  };
+  xhr.onerror = function () { prog.textContent = ''; alert('Сетевая ошибка при загрузке.'); };
+  xhr.send(file);
+}
+
+/** Мин. версия приложения — принудительное обновление, см. handlers/admin.ts askAppVersion. */
+function appVersionCard(res) {
+  var r = res || {};
+  var cur = Number(r.min_version_code || 0);
+  return '<div class="card"><h3>' + hIcon('device') + 'Мин. версия приложения</h3>' +
+    '<p class="muted">' + (cur > 0 ? 'Сейчас: заблокированы версии с versionCode < ' + cur : 'Сейчас: выключено') + '</p>' +
+    '<div class="admin-form">' +
+    '<input type="number" id="avCode" placeholder="Мин. versionCode (0 — выключить)" value="' + cur + '">' +
+    '<textarea id="avMsg" rows="2" placeholder="Сообщение для пользователей со старой версией">' + esc(r.message || '') + '</textarea>' +
+    '<button class="btn primary" onclick="saveAppVersion()">Сохранить</button>' +
+    '</div></div>';
+}
+
+function saveAppVersion() {
+  var code = Number(document.getElementById('avCode').value || 0);
+  var msg = document.getElementById('avMsg').value.trim();
+  if (code > 0 && !msg) { alert('Нужен текст сообщения, если ограничение включено.'); return; }
+  api('admin_set_app_version', { min_version_code: code, message: msg }).then(function (res) {
+    if (!res.success) { alert(res.error || 'Ошибка'); return; }
+    haptic('medium'); loaded.admin = false; switchTab('admin');
+  });
+}
+
+/** Выключатель входа/регистрации на сайте — см. handlers/admin.ts showSiteAuthGate. */
+function siteAuthGateCard(res) {
+  var enabled = !!(res && res.enabled);
+  return '<div class="card"><h3>' + hIcon('lock') + 'Вход и регистрация на сайте</h3>' +
+    '<p class="muted">Сейчас: ' + (enabled ? '🟢 включены' : '🔴 выключены') + '</p>' +
+    '<button class="btn ' + (enabled ? 'danger' : 'primary') + '" onclick="toggleSiteAuthGate(' + (enabled ? 'false' : 'true') + ')">' +
+    (enabled ? '🔴 Выключить вход на сайте' : '🟢 Включить вход на сайте') + '</button></div>';
+}
+
+function toggleSiteAuthGate(enable) {
+  api('admin_set_site_auth_gate', { enabled: enable }).then(function (res) {
+    if (!res.success) { alert(res.error || 'Ошибка'); return; }
+    haptic('medium'); loaded.admin = false; switchTab('admin');
   });
 }
 
