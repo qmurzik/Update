@@ -22,5 +22,5 @@ export async function showSubscription(ctx: Ctx): Promise<void> {
     lines.push('', '❗️ Продлите, и я сразу же верну доступ.', '', `Тариф: <b>${esc(sub.plan)}</b>`);
   }
 
-  await reply(ctx, lines.join('\n'), subscriptionKeyboard(ctx.env));
+  await reply(ctx, lines.join('\n'), subscriptionKeyboard());
 }

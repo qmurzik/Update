@@ -52,9 +52,8 @@ export const reviewStarsKeyboard = (hasExisting: boolean): InlineKeyboard => {
   return kb;
 };
 
-export const subscriptionKeyboard = (env: Env): InlineKeyboard => [
+export const subscriptionKeyboard = (): InlineKeyboard => [
   [{ text: '💳 Купить/продлить в боте', callback_data: 'pay:plans' }],
-  [{ text: '🌐 Страница оплаты на сайте', url: env.QMODS_SUBSCRIBE_URL }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 
@@ -102,8 +101,12 @@ export const notificationsKeyboard = (hasUnread: boolean): InlineKeyboard => {
   return kb;
 };
 
-export const supportKeyboard = (env: Env): InlineKeyboard => [
-  [{ text: '🆘 Страница поддержки', url: env.QMODS_SUPPORT_URL }],
+// Сайтовая "Страница поддержки" убрана намеренно — тикет теперь пишется
+// прямо в боте (см. handlers/support.ts askSupportMessage), сайт для этого
+// больше не нужен. Сообщество в Telegram остаётся — это тоже Telegram, не
+// уход "на сторону".
+export const supportKeyboard = (): InlineKeyboard => [
+  [{ text: '✍️ Написать в поддержку', callback_data: 'sup:ask' }],
   [{ text: '💬 Сообщество в Telegram', url: 'https://t.me/qmurzik' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];

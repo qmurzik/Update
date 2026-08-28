@@ -15,7 +15,7 @@ import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
 import { showPayments } from './payments';
 import { askBuyPlan, checkOrderStatus, handleBuyPlan, handlePaidReturn } from './payment';
 import { markAllRead, showNotifications } from './notifications';
-import { showSupport } from './support';
+import { askSupportMessage, handleSupportMessageInput, showSupport } from './support';
 import { showAchievements } from './achievements';
 import { showReferrals } from './referrals';
 import { showAppRelease } from './app';
@@ -61,6 +61,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'pay:plans': askBuyPlan,
   'm:notif': showNotifications,
   'm:support': showSupport,
+  'sup:ask': askSupportMessage,
   'm:ach': showAchievements,
   'm:ref': showReferrals,
   'm:app': showAppRelease,
@@ -304,6 +305,8 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
       return handleReleaseInfoInput(ctx, text);
     case 'admin_apk_upload_wait':
       return reply(ctx, 'Пришлите файл .apk документом (не текстом).', cancelKeyboard('adm:app'));
+    case 'support_text':
+      return handleSupportMessageInput(ctx, text);
     case 'review_text':
       return handleReviewText(ctx, Number(state.payload.rating ?? 0), text);
     default:

@@ -21,5 +21,5 @@ export async function showPayments(ctx: Ctx): Promise<void> {
     lines.push('', 'Продлить подписку можно на странице оплаты QMods:');
   }
 
-  await reply(ctx, lines.join('\n'), paymentsKeyboard(ctx.env));
+  await reply(ctx, lines.join('\n'), paymentsKeyboard());
 }
