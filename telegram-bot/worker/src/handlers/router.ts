@@ -8,6 +8,7 @@ import { handleInlineQuery } from './inline';
 import { handleDevicePairClaim, handleDevicePairReject } from './devicePair';
 import { handleStart, showMainMenu } from './start';
 import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
+import { cancelRegister, handleRegisterUsernameInput, startRegister } from './register';
 import { showProfile } from './profile';
 import { showSubscription } from './subscription';
 import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
@@ -36,8 +37,10 @@ import {
   handleSearchInput,
   showAdminMenu,
   showCurrentCard,
+  showSiteAuthGate,
   showStats,
   showUsersList,
+  toggleSiteAuthGate,
 } from './admin';
 import { reply } from './reply';
 
@@ -58,6 +61,8 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'link:cancel': cancelLink,
   'link:unlink:ask': askUnlink,
   'link:unlink:yes': confirmUnlink,
+  'reg:start': startRegister,
+  'reg:cancel': cancelRegister,
   'dev:rm:ask': askRemoveDevice,
   'dev:rm:yes': confirmRemoveDevice,
   'notif:readall': markAllRead,
@@ -72,6 +77,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'adm:del:yes': confirmDelete,
   'adm:broadcast': askBroadcast,
   'adm:appver': askAppVersion,
+  'adm:siteauth': showSiteAuthGate,
   'adm:card': showCurrentCard,
 };
 
@@ -111,6 +117,10 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
   if (data.startsWith('devicepair:reject:')) {
     const code = data.slice('devicepair:reject:'.length);
     if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) return (ctx) => handleDevicePairReject(ctx, code);
+  }
+  if (data.startsWith('adm:siteauth:set:')) {
+    const val = data.slice('adm:siteauth:set:'.length);
+    if (val === '0' || val === '1') return (ctx) => toggleSiteAuthGate(ctx, val === '1');
   }
   return null;
 }
@@ -226,6 +236,8 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
   switch (state.awaiting) {
     case 'link_code':
       return handleLinkCodeInput(ctx, text);
+    case 'register_username':
+      return handleRegisterUsernameInput(ctx, text);
     case 'admin_search':
       return handleSearchInput(ctx, text);
     case 'admin_issue_days':

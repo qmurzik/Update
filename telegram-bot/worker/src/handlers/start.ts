@@ -45,7 +45,9 @@ export async function showMainMenu(ctx: Ctx, prefaceText?: string): Promise<void
     lines.push(`👤 <b>${esc(me.user.username)}</b>`);
     lines.push(`<blockquote>${statusLine}</blockquote>`);
   } else {
-    lines.push('🔒 Аккаунт QMods ещё не привязан. Нажмите кнопку ниже, чтобы подключить бота к вашему личному кабинету.');
+    lines.push(
+      '🔒 Аккаунт QMods ещё не привязан. Если уже регистрировались на сайте — привяжите его кодом из кабинета. Новый аккаунт можно создать прямо здесь, без сайта.'
+    );
   }
 
   await reply(ctx, lines.join('\n'), mainMenu(ctx.env, linked, admin));

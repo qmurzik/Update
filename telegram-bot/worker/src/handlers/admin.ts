@@ -1,5 +1,12 @@
 import type { Ctx } from './context';
-import { adminMenuKeyboard, adminUserCardKeyboard, adminUsersListKeyboard, cancelKeyboard, confirmKeyboard } from '../telegram/keyboards';
+import {
+  adminMenuKeyboard,
+  adminUserCardKeyboard,
+  adminUsersListKeyboard,
+  cancelKeyboard,
+  confirmKeyboard,
+  siteAuthGateKeyboard,
+} from '../telegram/keyboards';
 import { DIVIDER, esc, splitTitleBody } from '../util';
 import { isAdmin } from '../config';
 import { clearState, getState, logAdminAction, setState } from '../db';
@@ -281,4 +288,37 @@ export async function handleAppVersionInput(ctx: Ctx, text: string): Promise<voi
       : `❌ ${esc(String(res.error ?? ''))}`,
     cancelKeyboard('adm:menu')
   );
+}
+
+/**
+ * Site-side login/registration kill switch — part of the migration to
+ * Telegram-only accounts (see php-api/INTEGRATION.md "Выключатель входа/
+ * регистрации на сайте"). Only gates qmods.ru's own forms: the bot's own
+ * /link (existing accounts) and /start's "🆕 Зарегистрироваться" (new
+ * accounts) keep working regardless of this flag.
+ */
+export async function showSiteAuthGate(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  const current = await ctx.adminApi.getSiteAuthGate();
+  const enabled = !!current.enabled;
+
+  const lines = [
+    '<b>🌐 Вход и регистрация на сайте</b>',
+    DIVIDER,
+    '',
+    `Сейчас: ${enabled ? '🟢 включены' : '🔴 выключены'}.`,
+    '',
+    enabled
+      ? 'Пользователи всё ещё могут входить и регистрироваться на qmods.ru напрямую. Выключите, когда будете готовы завершить миграцию в бота.'
+      : 'Формы входа/регистрации на сайте показывают подсказку перейти в Telegram-бота. Привязка уже существующих аккаунтов по коду продолжает работать как обычно, и новые аккаунты по-прежнему можно создать прямо в боте.',
+  ];
+
+  await reply(ctx, lines.join('\n'), siteAuthGateKeyboard(enabled));
+}
+
+export async function toggleSiteAuthGate(ctx: Ctx, enabled: boolean): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+  const res = await ctx.adminApi.setSiteAuthGate(enabled);
+  await logAdminAction(ctx.env, ctx.telegramId, 'set_site_auth_gate', { enabled, success: res.success });
+  await showSiteAuthGate(ctx);
 }

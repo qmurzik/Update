@@ -355,6 +355,79 @@ if ($action === 'link') {
 }
 
 // ============================================================
+// REGISTER — регистрация НОВОГО аккаунта прямо из бота, без сайта
+// (миграция: альтернатива /link для тех, кто ещё не заводил аккаунт на
+// qmods.ru). Создаёт пользователя без поля password — тот же формат, что
+// и create-ветка admin/bot.php?action=issue (админские бот-аккаунты уже
+// годами создаются так же, это не новый паттерн). Подписки/plan по
+// умолчанию нет ('none') — как и при снятии подписки (action=remove);
+// если реальная регистрация на сайте даёт пробный период — поправьте
+// $newExpiresAt ниже под ваши правила.
+// ============================================================
+
+if ($action === 'register') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    $username = trim((string)($req['username'] ?? ''));
+
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Никнейм должен быть 3–20 символов: латиница, цифры, _ и -.'], 400);
+    }
+
+    $usernameLower = strtolower($username);
+    $users = load_users();
+
+    foreach ($users as $u) {
+        if ((string)($u['telegram_id'] ?? '') === $telegramId) {
+            bot_json([
+                'success' => false,
+                'error' => 'Telegram already linked',
+                'username' => (string)($u['username'] ?? ''),
+            ], 409);
+        }
+        if (($u['username_lower'] ?? '') === $usernameLower) {
+            bot_json(['success' => false, 'error' => 'Этот никнейм уже занят.'], 409);
+        }
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($username, $usernameLower, $telegramId): array {
+        // Авторитетная перепроверка внутри блокировки — то, что уже
+        // проверено выше на устаревшем снимке, могло измениться между
+        // load_users() и получением lock'а.
+        foreach ($users as $u) {
+            if ((string)($u['telegram_id'] ?? '') === $telegramId) {
+                return [$users, ['error' => 'Telegram already linked']];
+            }
+            if (($u['username_lower'] ?? '') === $usernameLower) {
+                return [$users, ['error' => 'Этот никнейм уже занят.']];
+            }
+        }
+
+        $users[] = [
+            'id' => bin2hex(random_bytes(16)),
+            'username' => $username,
+            'username_lower' => $usernameLower,
+            'created_at' => time(),
+            'telegram_id' => $telegramId,
+            'device_id' => '',
+            'subscription' => ['plan' => 'none', 'expires_at' => 0],
+            'payments' => [],
+        ];
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Storage error'], 500);
+    if (($result['error'] ?? '') !== '') {
+        bot_json(['success' => false, 'error' => $result['error']], 409);
+    }
+
+    log_action('Telegram register: ' . $username . ' / ' . $telegramId);
+    bot_json(['success' => true, 'username' => $username]);
+}
+
+// ============================================================
 // UNLINK — самостоятельная отвязка Telegram от аккаунта
 // ============================================================
 

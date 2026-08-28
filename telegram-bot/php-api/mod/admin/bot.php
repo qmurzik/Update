@@ -532,6 +532,23 @@ if ($action === 'set_app_version') {
 }
 
 // ============================================================
+// GET_SITE_AUTH_GATE / SET_SITE_AUTH_GATE — вход/регистрация на сайте
+// (миграция в бота, см. INTEGRATION.md "Выключатель входа/регистрации на сайте")
+// ============================================================
+
+if ($action === 'get_site_auth_gate') {
+    bot_json(['success' => true] + get_site_auth_gate());
+}
+
+if ($action === 'set_site_auth_gate') {
+    need_post();
+    $enabled = in_array(strtolower(req_string($request, 'enabled')), ['1', 'true', 'yes', 'on'], true);
+    set_site_auth_gate($enabled);
+    log_action('Telegram admin: set_site_auth_gate enabled=' . ($enabled ? '1' : '0'));
+    bot_json(['success' => true, 'enabled' => $enabled]);
+}
+
+// ============================================================
 // PENDING_PAYMENT_ALERTS — "кто/когда/что купил" для админа (cron воркера)
 // ============================================================
 

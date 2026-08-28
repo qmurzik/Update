@@ -84,6 +84,16 @@ export class QmodsUserApi {
     return callApi(this.url, this.token, 'unlink', { telegram_id: telegramId }, 'POST');
   }
 
+  /**
+   * Creates a brand-new qmods.ru account straight from the bot — the
+   * migration-era alternative to `link()` for people who never had a site
+   * account. See handlers/register.ts. mod/api/bot.php's `register` action
+   * links telegram_id immediately, no site password involved.
+   */
+  register(telegramId: string, username: string) {
+    return callApi<{ username?: string }>(this.url, this.token, 'register', { telegram_id: telegramId, username }, 'POST');
+  }
+
   devices(telegramId: string) {
     return callApi<{
       devices: Array<{ id: string; id_short: string; name: string | null; android_version: string | null; added_at: number; last_seen: number }>;
@@ -285,5 +295,20 @@ export class QmodsAdminApi {
    */
   setAppVersion(minVersionCode: number, message: string) {
     return callApi(this.url, this.token, 'set_app_version', { min_version_code: minVersionCode, message }, 'POST');
+  }
+
+  /** Current state of qmods.ru's own login/register forms (see handlers/admin.ts showSiteAuthGate). */
+  getSiteAuthGate() {
+    return callApi<{ enabled: boolean }>(this.url, this.token, 'get_site_auth_gate');
+  }
+
+  /**
+   * Toggles whether qmods.ru's own login.php/register.php accept site-based
+   * sign-ins — part of the migration to Telegram-only accounts. Never
+   * touches already-linked accounts or the bot's own /link and /register
+   * flows, which keep working regardless of this flag.
+   */
+  setSiteAuthGate(enabled: boolean) {
+    return callApi<{ enabled: boolean }>(this.url, this.token, 'set_site_auth_gate', { enabled: enabled ? 1 : 0 }, 'POST');
   }
 }

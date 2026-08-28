@@ -320,6 +320,30 @@ function set_app_version_gate(int $minVersionCode, string $message): void
 }
 
 /**
+ * Феча-флаг: принимает ли qmods.ru собственные вход/регистрацию через сайт —
+ * часть миграции пользователей на аккаунты, привязанные только к Telegram
+ * (см. INTEGRATION.md "Выключатель входа/регистрации на сайте"). По
+ * умолчанию (файла ещё нет) — включено, поэтому деплой этого файла сам по
+ * себе ничего не меняет, пока админ явно не выключит вход из бота.
+ */
+function get_site_auth_gate(): array
+{
+    return with_locked_json_file(DATA_DIR . '/site_auth_gate.json', function (array $data): array {
+        return [$data, [
+            'enabled' => array_key_exists('enabled', $data) ? (bool)$data['enabled'] : true,
+        ]];
+    });
+}
+
+function set_site_auth_gate(bool $enabled): void
+{
+    with_locked_json_file(DATA_DIR . '/site_auth_gate.json', function () use ($enabled): array {
+        $data = ['enabled' => $enabled, 'updated_at' => time()];
+        return [$data, null];
+    });
+}
+
+/**
  * Админский алерт "кто/когда/что купил" — отдельная очередь от персональных
  * уведомлений пользователя (data/admin_payment_alerts.json, не
  * notifications.json), т.к. это НЕ предназначено для получателя-покупателя:

@@ -8,7 +8,8 @@ export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKey
     : null;
 
   if (!linked) {
-    kb.push([{ text: '🔗 Привязать аккаунт QMods', callback_data: 'link:start' }]);
+    kb.push([{ text: '🔗 Привязать аккаунт с сайта', callback_data: 'link:start' }]);
+    kb.push([{ text: '🆕 Зарегистрироваться в Telegram', callback_data: 'reg:start' }]);
     if (webAppButton) kb.push(webAppButton);
     kb.push([{ text: '🆘 Поддержка', callback_data: 'm:support' }]);
   } else {
@@ -109,6 +110,8 @@ export const supportKeyboard = (env: Env): InlineKeyboard => [
 
 export const linkStartKeyboard = (): InlineKeyboard => [[{ text: '❌ Отмена', callback_data: 'link:cancel' }]];
 
+export const registerStartKeyboard = (): InlineKeyboard => [[{ text: '❌ Отмена', callback_data: 'reg:cancel' }]];
+
 export const adminMenuKeyboard = (): InlineKeyboard => [
   [
     { text: '📊 Статистика', callback_data: 'adm:stats' },
@@ -119,7 +122,18 @@ export const adminMenuKeyboard = (): InlineKeyboard => [
     { text: '📣 Рассылка всем', callback_data: 'adm:broadcast' },
   ],
   [{ text: '🚧 Мин. версия приложения', callback_data: 'adm:appver' }],
+  [{ text: '🌐 Вход/регистрация на сайте', callback_data: 'adm:siteauth' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
+];
+
+/** Toggle screen for get_site_auth_gate/set_site_auth_gate — see handlers/admin.ts showSiteAuthGate. */
+export const siteAuthGateKeyboard = (enabled: boolean): InlineKeyboard => [
+  [
+    enabled
+      ? { text: '🔴 Выключить вход на сайте', callback_data: 'adm:siteauth:set:0' }
+      : { text: '🟢 Включить вход на сайте', callback_data: 'adm:siteauth:set:1' },
+  ],
+  [{ text: '‹ В админ-меню', callback_data: 'adm:menu' }],
 ];
 
 export const adminUserCardKeyboard = (): InlineKeyboard => [
