@@ -305,12 +305,22 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const token = url.searchParams.get('token') ?? '';
     const username = token ? await getUsernameByDeviceToken(env, token) : null;
 
-    const topFrame = (stack.split('\n')[0] ?? '').trim().slice(0, 200);
+    // Android's Log.getStackTraceString() output already starts with the
+    // exception's own toString() ("Name: message\n\tat ...") — stack's first
+    // line is that header, not a real frame, so grab the first actual "at "
+    // line instead (otherwise the dedup signature is needlessly widened by
+    // whatever varies in the message, defeating the point of a separate
+    // topFrame component).
+    const topFrame = (stack.split('\n').find((line) => line.trim().startsWith('at ')) ?? '').trim().slice(0, 200);
     const signature = `android-crash|${name}|${message}|${topFrame}`.slice(0, 500);
 
     const syntheticError = new Error(message);
     syntheticError.name = name;
-    syntheticError.stack = `${name}: ${message}\n${stack}`;
+    // stack already carries "name: message" as its own first line — don't
+    // prepend it again (that showed up as the header repeating 2-3x in the
+    // Telegram alert: once from sendAlert's own "Тип:" line, once from this
+    // prefix, once from stack's own toString()-derived first line).
+    syntheticError.stack = stack || `${name}: ${message}`;
 
     const context = `android crash (${device || 'unknown device'}, v${versionName || '?'}/${versionCode}${username ? `, ${username}` : ''})`;
     ctx.waitUntil(reportError(env, syntheticError, context, signature));
