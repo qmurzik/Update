@@ -67,7 +67,7 @@ annotation` целиком. Она нужна только `kotlin-reflect` — 
 
 | Класс | Роль |
 |---|---|
-| `DevicePairing` | Точка входа для привязки: `startPairing(Context, PairingCallback)` |
+| `DevicePairing` | Точка входа для привязки: `startPairing(Context, PairingCallback)` и `startPairingByUsername(Context, String, PairingCallback)` (см. «Привязка по юзернейму») |
 | `DevicePairingRunnable` | Фоновый поток: запрашивает код, открывает Telegram, поллит статус |
 | `PairingCallback` | Интерфейс обратного вызова для привязки (`onCodeReady`/`onPaired`/`onFailed`) |
 | `CallbackDispatcher` | Доставляет вызовы `PairingCallback` в UI-поток через `Handler` |
@@ -119,6 +119,49 @@ annotation` целиком. Она нужна только `kotlin-reflect` — 
 Cloudflare Worker — только свой собственный `device_token`, который ничего
 не даёт без уже подтверждённой в Telegram привязки к конкретному аккаунту,
 и который можно отозвать в любой момент со стороны бота/кабинета.
+
+## Привязка по юзернейму (без Telegram на этом устройстве)
+
+Альтернатива для случая, когда на телефоне с приложением физически нет
+Telegram (или пользователь не хочет его ставить) — вместо открытия
+deep link'а `GateActivity` в режиме `"pair"` показывает под основной
+кнопкой «Войти через Telegram» второй, менее заметный (outline-стиль)
+блок: поле «ваш_telegram_ник» + кнопка «Подтвердить по юзернейму».
+
+Использует **ту же самую** серверную запись `device_pairings`/`code` и
+**тот же самый** цикл опроса `GET /device/pair/status?code=` — меняется
+только то, как аккаунт узнаёт о попытке входа:
+
+1. **Приложение**: `DevicePairing.startPairingByUsername(context, "ник",
+   callback)` → `POST /device/pair/start` (как обычно, получает `code`) →
+   затем, вместо открытия `deep_link`, отправляет
+   `POST /device/pair/notify-username?code=<CODE>&username=<ник>&device=<модель_телефона>`.
+2. **Воркер**: резолвит `@ник` в `chat_id` через кэш `telegram_users` D1
+   (заполняется на **каждое** входящее обновление боту — `router.ts`,
+   `upsertTelegramUser` — независимо от того, привязан ли этот чат к
+   qmods.ru). Если username не найден — `{success:false,
+   error:"telegram_not_started"}`: значит, этот Telegram-аккаунт **ни
+   разу не писал боту ни с одного устройства**; это единственное жёсткое
+   ограничение способа (Telegram Bot API физически не позволяет боту
+   написать первым туда, откуда не было ни одного апдейта) — в этом
+   случае `GateActivity` показывает подсказку открыть `@qmods_bot` и
+   нажать Start хотя бы один раз, затем повторить попытку.
+3. **Бот**: если username найден — шлёт **прямо в личку** этому `chat_id`
+   сообщение с моделью устройства-инициатора и двумя кнопками:
+   `✅ Подтвердить` (`devicepair:confirm:<CODE>` — переиспользует тот же
+   обработчик `handleDevicePairClaim`, что и deep-link путь, поэтому
+   гарантии те же: только владелец этого чата мог получить и нажать эту
+   кнопку) и `❌ Отклонить` (`devicepair:reject:<CODE>` →
+   `handleDevicePairReject`, помечает pairing `status: "rejected", reason:
+   "declined_by_user"`).
+4. **Приложение**: продолжает опрашивать `GET /device/pair/status?code=`
+   как обычно (шаг 4 обычного протокола выше) — новый путь ничего не
+   меняет в этой части, поэтому отдельного polling-эндпоинта не
+   понадобилось.
+
+Требует применённой на D1 таблицы `telegram_users` (см. `worker/schema.sql`)
+— без неё резолвинг username всегда вернёт `telegram_not_started`, даже
+если аккаунт писал боту.
 
 ## Проверка во время использования (не только при запуске)
 
@@ -187,7 +230,7 @@ Cloudflare Worker — только свой собственный `device_token
 
 | mode | Когда | Что показывает |
 |---|---|---|
-| `"pair"` | `device_token` отсутствует/отозван | «Войти через Telegram» → `DevicePairing.startPairing()` |
+| `"pair"` | `device_token` отсутствует/отозван | «Войти через Telegram» → `DevicePairing.startPairing()`, плюс альтернатива «Подтвердить по юзернейму» → `DevicePairing.startPairingByUsername()` (см. «Привязка по юзернейму» ниже) |
 | `"paywall"` | Привязан, но подписка неактивна | «Проверить снова» → повторный `SubscriptionChecker.check()` |
 | `"error"` | Сама проверка не удалась (сеть/сервер) | То же, что paywall, но с другой подписью — **fail-closed**: не пускаем, если не смогли подтвердить подписку |
 
