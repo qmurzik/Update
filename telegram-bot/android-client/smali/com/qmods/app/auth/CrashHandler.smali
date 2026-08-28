@@ -62,7 +62,7 @@
 # normal "app has stopped" flow still happens exactly as if this class
 # didn't exist — this only ever adds a brief, bounded delay in front of it.
 .method public uncaughtException(Ljava/lang/Thread;Ljava/lang/Throwable;)V
-    .locals 4
+    .locals 5
     .param p1, "thread"    # Ljava/lang/Thread;
     .param p2, "throwable"    # Ljava/lang/Throwable;
 
