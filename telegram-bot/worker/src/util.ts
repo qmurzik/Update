@@ -35,6 +35,9 @@ export function money(amount: number): string {
 export function splitTitleBody(text: string): { title: string; body: string } {
   const trimmed = text.trim();
   const idx = trimmed.indexOf('\n');
-  if (idx === -1) return { title: trimmed.slice(0, 80), body: trimmed };
+  // No second line means no body — NOT "body == the whole single line" (that
+  // used to make a single-line submission pass the "need both title and
+  // text" check with title and body holding the same content).
+  if (idx === -1) return { title: trimmed.slice(0, 80), body: '' };
   return { title: trimmed.slice(0, idx).trim().slice(0, 80), body: trimmed.slice(idx + 1).trim() };
 }

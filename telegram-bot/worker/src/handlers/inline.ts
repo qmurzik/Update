@@ -41,7 +41,7 @@ export async function handleInlineQuery(query: TgInlineQuery, env: Env): Promise
     ? 'подписки нет'
     : sub.active
       ? `🟢 активна · осталось ${daysRu(sub.days_left)}`
-      : `🔴 истекла ${sub.expires_text}`;
+      : `🔴 истекла ${esc(sub.expires_text)}`;
 
   const results: InlineQueryResultArticle[] = [
     {

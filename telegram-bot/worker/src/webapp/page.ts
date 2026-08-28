@@ -306,6 +306,21 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// esc() alone is NOT safe for building a JS string literal argument inside
+// an onclick="..." HTML attribute — it doesn't touch quotes, so a value
+// containing a single quote breaks out of the JS string and lets arbitrary
+// attribute content (including new JS) get injected. jsStr() produces a
+// complete, self-quoting JS string literal (via JSON.stringify) that's also
+// safe as HTML attribute content: use it as the whole argument, e.g.
+// onclick="fn(' + jsStr(x) + ')" — no manual quotes needed around it.
+function jsStr(s) {
+  return JSON.stringify(String(s == null ? '' : s))
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e');
+}
+
 function daysWord(n) {
   var mod100 = Math.abs(n) % 100;
   var mod10 = mod100 % 10;
@@ -549,7 +564,7 @@ function renderDevices() {
     el.innerHTML = '<div class="card"><h3>' + hIcon('device') + 'Устройство</h3>' +
       row('ID', '<code>' + esc(d.id_short) + '</code>') +
       row('Android', esc(d.android_version || 'неизвестно')) +
-      '<button class="btn danger" onclick="removeDevice(\\'' + esc(d.id) + '\\')">🗑 Отвязать устройство</button>' +
+      '<button class="btn danger" onclick="removeDevice(' + jsStr(d.id) + ')">🗑 Отвязать устройство</button>' +
       '</div>';
   });
 }
@@ -612,7 +627,7 @@ function renderAch() {
     if (r && r.success) {
       html += '<div class="card"><h3>' + hIcon('users') + 'Рефералы</h3><p class="muted">Приглашено: <b>' + r.ref_count + '</b></p>' +
         '<p class="muted">Достижения и бонусные дни за друзей начисляются автоматически.</p>' +
-        '<div class="copy-row"><code>' + esc(r.ref_link) + '</code><button onclick="copyText(\\'' + esc(r.ref_link) + '\\')">Копия</button></div></div>';
+        '<div class="copy-row"><code>' + esc(r.ref_link) + '</code><button onclick="copyText(' + jsStr(r.ref_link) + ')">Копия</button></div></div>';
     }
 
     el.innerHTML = html;
@@ -713,7 +728,7 @@ function renderUserList(list) {
   var el = document.getElementById('userList');
   if (!list.length) { el.innerHTML = '<p class="muted">Никого не найдено.</p>'; return; }
   el.innerHTML = list.slice(0, 100).map(function (u) {
-    return '<button class="user-row" onclick="selectAdminUser(\\'' + esc(u.username) + '\\')">' +
+    return '<button class="user-row" onclick="selectAdminUser(' + jsStr(u.username) + ')">' +
       '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) + '</span>' +
       '<span class="muted">' + (u.active ? u.days_left + 'д' : '') + '</span></button>';
   }).join('');
@@ -751,15 +766,15 @@ function renderUserDetail(u) {
 
   html += '<div class="admin-form">' +
     '<input type="number" id="issueDays" placeholder="Дней продлить" min="1" max="3650">' +
-    '<button class="btn primary" onclick="adminIssue(\\'' + esc(u.username) + '\\')">➕ Продлить подписку</button>' +
+    '<button class="btn primary" onclick="adminIssue(' + jsStr(u.username) + ')">➕ Продлить подписку</button>' +
     '</div>' +
     '<div class="admin-form">' +
     '<textarea id="msgText" rows="2" placeholder="Сообщение пользователю"></textarea>' +
-    '<button class="btn" onclick="adminMessage(\\'' + esc(u.username) + '\\')">📨 Написать</button>' +
+    '<button class="btn" onclick="adminMessage(' + jsStr(u.username) + ')">📨 Написать</button>' +
     '</div>' +
     '<div class="admin-form">' +
-    '<button class="btn" onclick="adminRemove(\\'' + esc(u.username) + '\\')">🚫 Снять подписку</button>' +
-    '<button class="btn danger" onclick="adminDelete(\\'' + esc(u.username) + '\\')">🗑 Удалить аккаунт</button>' +
+    '<button class="btn" onclick="adminRemove(' + jsStr(u.username) + ')">🚫 Снять подписку</button>' +
+    '<button class="btn danger" onclick="adminDelete(' + jsStr(u.username) + ')">🗑 Удалить аккаунт</button>' +
     '</div>' +
     '<p id="adminMsg" class="muted"></p>' +
     '</div>';

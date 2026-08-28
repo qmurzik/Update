@@ -20,6 +20,44 @@ if (!function_exists('load_users')) {
 }
 
 /**
+ * flock()-protected read-modify-write for the flat JSON files this file
+ * owns directly (app_version.json, admin_payment_alerts.json) — unlike
+ * notifications.json/users.json, these aren't covered by bootstrap.php's
+ * own locked update_notifications()/update_users() helpers, and a plain
+ * file_get_contents()+file_put_contents(..., LOCK_EX) pair only serializes
+ * the write, not the read-then-write as a whole: a write landing between
+ * another caller's read and write is silently lost (lost-update race).
+ * $mutator receives the current decoded array (empty array if the file is
+ * missing/invalid) and returns [$newData, $returnValue].
+ */
+function with_locked_json_file(string $path, callable $mutator)
+{
+    $fh = fopen($path, 'c+');
+    if ($fh === false) throw new RuntimeException("Cannot open {$path}");
+
+    try {
+        flock($fh, LOCK_EX);
+
+        $size = filesize($path) ?: 0;
+        $raw = $size > 0 ? fread($fh, $size) : '';
+        $data = $raw !== '' ? json_decode($raw, true) : null;
+        if (!is_array($data)) $data = [];
+
+        [$newData, $returnValue] = $mutator($data);
+
+        rewind($fh);
+        ftruncate($fh, 0);
+        fwrite($fh, json_encode($newData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        fflush($fh);
+
+        return $returnValue;
+    } finally {
+        flock($fh, LOCK_UN);
+        fclose($fh);
+    }
+}
+
+/**
  * Создаёт персональное уведомление для пользователя (по username).
  * Уведомление появляется и в кабинете (колокольчик), и в Telegram-боте —
  * оба канала читают один и тот же data/notifications.json.
@@ -261,24 +299,24 @@ function get_and_mark_app_notifications(string $usernameLower, int $limit = 20):
  */
 function get_app_version_gate(): array
 {
-    $file = DATA_DIR . '/app_version.json';
-    $data = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
-    if (!is_array($data)) $data = [];
-
-    return [
-        'min_version_code' => (int)($data['min_version_code'] ?? 0),
-        'message' => (string)($data['message'] ?? ''),
-    ];
+    return with_locked_json_file(DATA_DIR . '/app_version.json', function (array $data): array {
+        return [$data, [
+            'min_version_code' => (int)($data['min_version_code'] ?? 0),
+            'message' => (string)($data['message'] ?? ''),
+        ]];
+    });
 }
 
 function set_app_version_gate(int $minVersionCode, string $message): void
 {
-    $file = DATA_DIR . '/app_version.json';
-    file_put_contents($file, json_encode([
-        'min_version_code' => max(0, $minVersionCode),
-        'message' => $message,
-        'updated_at' => time(),
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+    with_locked_json_file(DATA_DIR . '/app_version.json', function () use ($minVersionCode, $message): array {
+        $data = [
+            'min_version_code' => max(0, $minVersionCode),
+            'message' => $message,
+            'updated_at' => time(),
+        ];
+        return [$data, null];
+    });
 }
 
 /**
@@ -302,21 +340,18 @@ function notify_admin_payment_event(string $usernameLower, string $planTitle, fl
         }
     }
 
-    $file = DATA_DIR . '/admin_payment_alerts.json';
-    $alerts = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
-    if (!is_array($alerts)) $alerts = [];
-
-    $alerts[] = [
-        'id' => bin2hex(random_bytes(16)),
-        'username' => $usernameLower,
-        'telegram_id' => $telegramId,
-        'plan' => $planTitle,
-        'amount' => $amount,
-        'days' => $days,
-        'created_at' => time(),
-    ];
-
-    file_put_contents($file, json_encode($alerts, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+    with_locked_json_file(DATA_DIR . '/admin_payment_alerts.json', function (array $alerts) use ($usernameLower, $telegramId, $planTitle, $amount, $days): array {
+        $alerts[] = [
+            'id' => bin2hex(random_bytes(16)),
+            'username' => $usernameLower,
+            'telegram_id' => $telegramId,
+            'plan' => $planTitle,
+            'amount' => $amount,
+            'days' => $days,
+            'created_at' => time(),
+        ];
+        return [$alerts, null];
+    });
 }
 
 /**
@@ -327,13 +362,11 @@ function notify_admin_payment_event(string $usernameLower, string $planTitle, fl
  */
 function get_and_clear_payment_alerts(int $limit = 100): array
 {
-    $file = DATA_DIR . '/admin_payment_alerts.json';
-    $alerts = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
-    if (!is_array($alerts) || empty($alerts)) return [];
+    return with_locked_json_file(DATA_DIR . '/admin_payment_alerts.json', function (array $alerts) use ($limit): array {
+        if (empty($alerts)) return [$alerts, []];
 
-    $out = array_slice($alerts, 0, $limit);
-    $remaining = array_slice($alerts, count($out));
-    file_put_contents($file, json_encode($remaining, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
-
-    return $out;
+        $out = array_slice($alerts, 0, $limit);
+        $remaining = array_slice($alerts, count($out));
+        return [$remaining, $out];
+    });
 }
