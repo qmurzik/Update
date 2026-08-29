@@ -266,7 +266,16 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const versionCode = Number.parseInt(url.searchParams.get('version_code') ?? '', 10) || 0;
     const api = new QmodsUserApi(env);
     const res = await api.subscriptionByUsername(username, versionCode);
-    if (!res.success) return jsonResponse({ success: false, error: 'Upstream error' }, 502);
+    if (!res.success) {
+      // Hit on every device's ~90s heartbeat — a real failure here (PHP auth
+      // broken, site down, etc.) strands every app user on GateActivity's
+      // generic "error"/"Проверьте интернет" screen with nobody the wiser,
+      // since the app itself has no way to tell us. reportError's built-in
+      // dedup means this fires once per distinct failure, not once per user
+      // per heartbeat.
+      ctx.waitUntil(reportError(env, new Error(`device_subscription upstream failure: ${String(res.error ?? 'unknown')}`), 'device/subscription'));
+      return jsonResponse({ success: false, error: 'Upstream error' }, 502);
+    }
     return jsonResponse({
       success: true,
       found: res.found,
