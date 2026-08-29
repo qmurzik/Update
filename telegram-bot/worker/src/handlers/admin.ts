@@ -10,7 +10,7 @@ import {
 } from '../telegram/keyboards';
 import { DIVIDER, esc, splitTitleBody } from '../util';
 import { isAdmin } from '../config';
-import { clearState, getState, logAdminAction, setState } from '../db';
+import { clearState, getState, logAdminAction, revokeDeviceTokensForUsername, setState } from '../db';
 import type { AdminUserCard, AdminUserSummary } from '../qmodsApi';
 import { uploadApkBinary } from '../qmodsApi';
 import type { TgDocument } from '../telegram/types';
@@ -185,6 +185,14 @@ export async function confirmDelete(ctx: Ctx): Promise<void> {
   if (!username) return showAdminMenu(ctx);
 
   const res = await ctx.adminApi.deleteUser(username);
+  // PHP только удаляет строку в users.json — понятия не имеет о D1
+  // воркера. Без этого у любого привязанного устройства device_token
+  // остаётся "живым" (резолвится в username, который больше не
+  // существует) — android-client получает found:false и раньше
+  // застревал на бессрочном экране ошибки вместо экрана привязки (см.
+  // SubscriptionCheckRunnable в android-client — теперь она сама себя
+  // лечит через not_paired, но лучше вообще не оставлять токен висеть).
+  if (res.success) await revokeDeviceTokensForUsername(ctx.env, username);
   await logAdminAction(ctx.env, ctx.telegramId, 'delete_user', { username, success: res.success });
   await clearState(ctx.env, ctx.chatId); // аккаунт удалён — карточка больше не существует
   await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:menu'));

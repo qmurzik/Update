@@ -1,7 +1,7 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
-import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken } from '../db';
+import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
 import { extractInitData, validateInitData } from './validate';
@@ -201,8 +201,13 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
     case 'admin_remove':
       return json(await adminApi.remove(String(body.username ?? '')));
 
-    case 'admin_delete_user':
-      return json(await adminApi.deleteUser(String(body.username ?? '')));
+    case 'admin_delete_user': {
+      const username = String(body.username ?? '');
+      const res = await adminApi.deleteUser(username);
+      // Same D1 cleanup as handlers/admin.ts confirmDelete — see its comment.
+      if (res.success) await revokeDeviceTokensForUsername(env, username);
+      return json(res);
+    }
 
     case 'admin_send_notification': {
       const target = body.target ? String(body.target) : undefined;
