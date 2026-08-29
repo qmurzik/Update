@@ -9,6 +9,7 @@ export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKey
 
   if (!linked) {
     kb.push([{ text: '🔗 Привязать аккаунт с сайта', callback_data: 'link:start' }]);
+    kb.push([{ text: '🔑 Войти по логину и паролю', callback_data: 'link:pw' }]);
     kb.push([{ text: '🆕 Зарегистрироваться в Telegram', callback_data: 'reg:start' }]);
     if (webAppButton) kb.push(webAppButton);
     kb.push([{ text: '🆘 Поддержка', callback_data: 'm:support' }]);
@@ -111,7 +112,15 @@ export const supportKeyboard = (): InlineKeyboard => [
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 
-export const linkStartKeyboard = (): InlineKeyboard => [[{ text: '❌ Отмена', callback_data: 'link:cancel' }]];
+export const linkStartKeyboard = (): InlineKeyboard => [
+  [{ text: '🔑 Войти по паролю вместо кода', callback_data: 'link:pw' }],
+  [{ text: '❌ Отмена', callback_data: 'link:cancel' }],
+];
+
+export const linkPasswordKeyboard = (): InlineKeyboard => [
+  [{ text: '🔗 Ввести код вместо этого', callback_data: 'link:start' }],
+  [{ text: '❌ Отмена', callback_data: 'link:cancel' }],
+];
 
 export const registerStartKeyboard = (): InlineKeyboard => [[{ text: '❌ Отмена', callback_data: 'reg:cancel' }]];
 

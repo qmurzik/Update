@@ -7,7 +7,7 @@ import type { TgUpdate } from '../telegram/types';
 import { handleInlineQuery } from './inline';
 import { handleDevicePairClaim, handleDevicePairReject } from './devicePair';
 import { handleStart, showMainMenu } from './start';
-import { askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, startLink } from './link';
+import { askLinkPassword, askUnlink, cancelLink, confirmUnlink, handleLinkCodeInput, handleLinkPasswordInput, startLink } from './link';
 import { cancelRegister, handleRegisterUsernameInput, startRegister, startWithReferral } from './register';
 import { showProfile } from './profile';
 import { showSubscription } from './subscription';
@@ -67,6 +67,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'm:app': showAppRelease,
   'm:review': showReview,
   'link:start': startLink,
+  'link:pw': askLinkPassword,
   'link:cancel': cancelLink,
   'link:unlink:ask': askUnlink,
   'link:unlink:yes': confirmUnlink,
@@ -289,6 +290,8 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
   switch (state.awaiting) {
     case 'link_code':
       return handleLinkCodeInput(ctx, text);
+    case 'link_password':
+      return handleLinkPasswordInput(ctx, text);
     case 'register_username':
       return handleRegisterUsernameInput(ctx, text, String(state.payload.ref ?? ''));
     case 'admin_search':

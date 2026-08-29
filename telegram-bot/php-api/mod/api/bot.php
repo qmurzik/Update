@@ -366,6 +366,90 @@ if ($action === 'link') {
 }
 
 // ============================================================
+// LINK_BY_PASSWORD — привязка Telegram по логину+паролю от сайта, без
+// одноразового кода из кабинета (тот приходится получать НА сайте, что
+// противоречит цели "бот — единственный доступ к QMods", если вход на
+// сайте вообще выключен — см. README "Известный оставшийся разрыв").
+// Пароль сверяется тем же password_verify()/pass_hash, что и login.php.
+//
+// Общий бюджет попыток с обычным `link` (link_attempts_blocked/register,
+// ключ — telegram_id): подбор кода и подбор пароля — это один и тот же
+// сценарий атаки (угадать доступ к чужому аккаунту), лимит один на оба.
+// ============================================================
+
+if ($action === 'link_by_password') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    $username = trim((string)($req['username'] ?? ''));
+    $password = (string)($req['password'] ?? '');
+
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+    if ($username === '' || $password === '') {
+        bot_json(['success' => false, 'error' => 'Укажите логин и пароль'], 400);
+    }
+
+    if (link_attempts_blocked($telegramId)) {
+        log_action('Bot link_by_password: rate limit hit for telegram_id ' . $telegramId);
+        bot_json(['success' => false, 'error' => 'Слишком много попыток. Попробуйте позже.'], 429);
+    }
+
+    $users = load_users();
+    foreach ($users as $u) {
+        if ((string)($u['telegram_id'] ?? '') === $telegramId) {
+            bot_json([
+                'success' => false,
+                'error' => 'Telegram already linked',
+                'username' => (string)($u['username'] ?? ''),
+            ], 409);
+        }
+    }
+
+    // Один и тот же ответ на "нет такого логина" и "неверный пароль" —
+    // не даём угадывающему отличить существующий аккаунт от несуществующего.
+    $user = find_user_by_username($users, $username);
+    if ($user === null || !password_verify($password, (string)($user['pass_hash'] ?? ''))) {
+        link_attempts_register($telegramId);
+        bot_json(['success' => false, 'error' => 'Неверный логин или пароль.'], 401);
+    }
+
+    if (!empty($user['telegram_id'])) {
+        bot_json(['success' => false, 'error' => 'Этот аккаунт уже привязан к другому Telegram.'], 409);
+    }
+
+    $foundId = (string)($user['id'] ?? '');
+    $foundUsername = (string)($user['username'] ?? '');
+
+    [$ok, $result] = update_users(function (array $users) use ($foundId, $telegramId): array {
+        foreach ($users as &$u) {
+            if ((string)($u['id'] ?? '') !== $foundId) continue;
+            // Авторитетная перепроверка внутри блокировки — аккаунт мог
+            // быть привязан кем-то ещё между load_users() и этим update.
+            if (!empty($u['telegram_id'])) {
+                return [$users, ['error' => 'Этот аккаунт уже привязан к другому Telegram.']];
+            }
+            $u['telegram_id'] = $telegramId;
+            break;
+        }
+        unset($u);
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Storage error'], 500);
+    if (($result['error'] ?? '') !== '') {
+        bot_json(['success' => false, 'error' => $result['error']], 409);
+    }
+
+    log_action('Telegram linked by password: ' . $foundUsername . ' / ' . $telegramId);
+    notify_user_event(
+        strtolower($foundUsername),
+        '🔗 Telegram привязан',
+        'Ваш аккаунт успешно привязан к Telegram-боту QMods (вход по логину и паролю).'
+    );
+    bot_json(['success' => true, 'linked' => true, 'username' => $foundUsername]);
+}
+
+// ============================================================
 // REGISTER — регистрация НОВОГО аккаунта прямо из бота, без сайта
 // (миграция: альтернатива /link для тех, кто ещё не заводил аккаунт на
 // qmods.ru). Создаёт пользователя без поля password — тот же формат, что

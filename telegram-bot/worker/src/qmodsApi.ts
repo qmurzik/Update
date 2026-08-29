@@ -80,6 +80,25 @@ export class QmodsUserApi {
     return callApi<{ linked: boolean; username?: string }>(this.url, this.token, 'link', { telegram_id: telegramId, code }, 'POST');
   }
 
+  /**
+   * Alternative to `link()` for an existing site account when getting a
+   * one-time code isn't practical (no site access, site login disabled,
+   * etc.) — verifies straight against the site's own password hash
+   * (`pass_hash`, same `password_verify()` as login.php), no code round
+   * trip. Shares link's rate-limit budget server-side (`link_attempts_*`
+   * in mod/api/bot.php) since both are "guess access to someone else's
+   * account" attempts. See handlers/link.ts handleLinkPasswordInput.
+   */
+  linkByPassword(telegramId: string, username: string, password: string) {
+    return callApi<{ linked?: boolean; username?: string }>(
+      this.url,
+      this.token,
+      'link_by_password',
+      { telegram_id: telegramId, username, password },
+      'POST'
+    );
+  }
+
   unlink(telegramId: string) {
     return callApi(this.url, this.token, 'unlink', { telegram_id: telegramId }, 'POST');
   }

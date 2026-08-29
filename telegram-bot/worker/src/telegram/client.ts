@@ -63,6 +63,18 @@ export class TelegramClient {
     });
   }
 
+  /**
+   * Deletes a message — used right after a user sends their password in
+   * chat (see handlers/link.ts handleLinkPasswordInput) so it doesn't sit
+   * in plaintext in the chat history. Best-effort: whether a bot can
+   * delete a message it didn't send in a private chat depends on the
+   * Bot API version/age of the message, and this is privacy sugar, not
+   * the actual auth boundary — callers should swallow failures.
+   */
+  deleteMessage(chatId: number | string, messageId: number) {
+    return this.call('deleteMessage', { chat_id: chatId, message_id: messageId });
+  }
+
   answerCallbackQuery(callbackQueryId: string, text?: string, showAlert = false) {
     return this.call('answerCallbackQuery', {
       callback_query_id: callbackQueryId,
