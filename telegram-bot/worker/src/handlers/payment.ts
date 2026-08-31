@@ -1,9 +1,12 @@
+import type { Env } from '../config';
 import type { Ctx } from './context';
 import { backButton, planPickerKeyboard, payOrderKeyboard } from '../telegram/keyboards';
 import { DIVIDER, esc, money } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 import { createPaymentOrder, getPaymentOrder } from '../db';
+import type { PaymentOrderRow } from '../db';
+import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
 import { buildQuickpayUrl } from '../yoomoney';
 
 /** Shows the plan list ("💳 Купить подписку") — the plans() action existed but was never wired up client-side before this. */
@@ -91,6 +94,25 @@ export async function handleBuyDeviceSlot(ctx: Ctx): Promise<void> {
   );
 }
 
+/**
+ * Self-heal for a "клон" order: the webhook (`/pay/yoomoney/webhook` in
+ * index.ts) marks the order 'paid' and THEN, in a separate fire-and-forget
+ * `ctx.waitUntil()`, calls grant_device_slot — if that second step fails
+ * (deploy lag between the two PHP files landing on the server, a transient
+ * PHP/network error) the money is captured but extra_device_slot never
+ * gets set, with no automatic retry. Both places that report a paid
+ * order back to the user — checkOrderStatus below and the Mini App's
+ * `pay_status` (webapp/api.ts) — call this first, so a stuck purchase
+ * completes itself the next time the user checks instead of silently
+ * staying broken forever.
+ */
+export async function ensureDeviceSlotGranted(env: Env, telegramId: string, order: PaymentOrderRow): Promise<void> {
+  if (order.plan_id !== DEVICE_SLOT_PLAN_ID) return;
+  const me = await new QmodsUserApi(env).me(telegramId);
+  if (!me.linked || !me.user || me.user.extra_device_slot) return;
+  await new QmodsAdminApi(env).grantDeviceSlot(order.username, order.amount).catch(() => undefined);
+}
+
 /** callback_data `pay:check:<orderId>` — manual re-check, in case the webhook is slow or the successURL round-trip didn't land. */
 export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void> {
   const order = await getPaymentOrder(ctx.env, orderId);
@@ -100,6 +122,7 @@ export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void>
   }
 
   if (order.status === 'paid') {
+    await ensureDeviceSlotGranted(ctx.env, ctx.telegramId, order);
     const message =
       order.plan_id === DEVICE_SLOT_PLAN_ID
         ? '✅ Оплата подтверждена! Клон активирован — второе устройство можно привязать в любой момент, в разделе «⚙️ Устройства».'

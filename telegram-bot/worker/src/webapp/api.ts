@@ -2,7 +2,7 @@ import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
 import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
-import { DEVICE_SLOT_PLAN_ID, DEVICE_SLOT_PRICE, DEVICE_SLOT_TITLE } from '../handlers/payment';
+import { DEVICE_SLOT_PLAN_ID, DEVICE_SLOT_PRICE, DEVICE_SLOT_TITLE, ensureDeviceSlotGranted } from '../handlers/payment';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
 import { extractInitData, validateInitData } from './validate';
@@ -175,6 +175,7 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
       const orderId = String(body.order_id ?? '');
       const order = await getPaymentOrder(env, orderId);
       if (!order) return json({ success: false, error: 'Order not found' }, 404);
+      if (order.status === 'paid') await ensureDeviceSlotGranted(env, telegramId, order);
       return json({ success: true, status: order.status, plan: order.plan_title, days: order.days, amount: order.amount });
     }
 
