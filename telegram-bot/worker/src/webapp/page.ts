@@ -1020,7 +1020,8 @@ function renderUserDetail(u) {
     row('Telegram', u.telegram_id ? '<code>' + esc(u.telegram_id) + '</code>' : 'не привязан') +
     row('Устройство', u.device_id ? '✅' : '—') +
     row('Тариф', esc(u.subscription.plan) + ' (' + (u.subscription.active ? '🟢' : '🔴') + ')') +
-    row('Окончание', esc(u.subscription.expires_text));
+    row('Окончание', esc(u.subscription.expires_text)) +
+    row('Клон (2-е устройство)', u.extra_device_slot ? '✅ выдан' : '—');
 
   if (u.payments && u.payments.length) {
     html += '<p class="muted" style="margin-top:8px"><b>Платежи:</b></p>';
@@ -1035,6 +1036,10 @@ function renderUserDetail(u) {
     '<textarea id="msgText" rows="2" placeholder="Сообщение пользователю"></textarea>' +
     '<button class="btn" onclick="adminMessage(' + jsStr(u.username) + ')">📨 Написать</button>' +
     '</div>' +
+    (u.extra_device_slot ? '' :
+      '<div class="admin-form">' +
+      '<button class="btn" onclick="adminGrantDeviceSlot(' + jsStr(u.username) + ')">🧬 Выдать клона</button>' +
+      '</div>') +
     '<div class="admin-form">' +
     '<button class="btn" onclick="adminRemove(' + jsStr(u.username) + ')">🚫 Снять подписку</button>' +
     '<button class="btn danger" onclick="adminDelete(' + jsStr(u.username) + ')">🗑 Удалить аккаунт</button>' +
@@ -1042,6 +1047,14 @@ function renderUserDetail(u) {
     '<p id="adminMsg" class="muted"></p>' +
     '</div>';
   el.innerHTML = html;
+}
+
+function adminGrantDeviceSlot(username) {
+  if (!confirm('Выдать клона (второе устройство) для ' + username + ' без оплаты?')) return;
+  api('admin_issue_device_slot', { username: username }).then(function (res) {
+    showAdminResult(res);
+    if (res.success) selectAdminUser(username);
+  });
 }
 
 function adminIssue(username) {

@@ -174,21 +174,27 @@ export const siteAuthGateKeyboard = (enabled: boolean): InlineKeyboard => [
   [{ text: '‹ В админ-меню', callback_data: 'adm:menu' }],
 ];
 
-export const adminUserCardKeyboard = (): InlineKeyboard => [
-  [
-    { text: '➕ Продлить', callback_data: 'adm:issue' },
-    { text: '📨 Написать', callback_data: 'adm:msg' },
-  ],
-  [
-    { text: '🚫 Снять подписку', callback_data: 'adm:rm:ask' },
-    { text: '🗑 Удалить', callback_data: 'adm:del:ask' },
-  ],
-  [
-    { text: '🔍 Поиск', callback_data: 'adm:search' },
-    { text: '📋 Список', callback_data: 'adm:users:0' },
-  ],
-  [{ text: '‹ В админ-меню', callback_data: 'adm:menu' }],
-];
+export const adminUserCardKeyboard = (hasCloneSlot: boolean): InlineKeyboard => {
+  const kb: InlineKeyboard = [
+    [
+      { text: '➕ Продлить', callback_data: 'adm:issue' },
+      { text: '📨 Написать', callback_data: 'adm:msg' },
+    ],
+  ];
+  if (!hasCloneSlot) kb.push([{ text: '🧬 Выдать клона', callback_data: 'adm:devslot:ask' }]);
+  kb.push(
+    [
+      { text: '🚫 Снять подписку', callback_data: 'adm:rm:ask' },
+      { text: '🗑 Удалить', callback_data: 'adm:del:ask' },
+    ],
+    [
+      { text: '🔍 Поиск', callback_data: 'adm:search' },
+      { text: '📋 Список', callback_data: 'adm:users:0' },
+    ],
+    [{ text: '‹ В админ-меню', callback_data: 'adm:menu' }]
+  );
+  return kb;
+};
 
 export interface AdminUserRow {
   username: string;

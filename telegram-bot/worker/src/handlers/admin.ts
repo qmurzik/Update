@@ -96,6 +96,7 @@ function userCardText(u: AdminUserCard): string {
     `Устройство: ${u.device_id ? '✅ привязано' : '—'}`,
     `Тариф: ${esc(u.subscription.plan)} (${u.subscription.active ? '🟢 активна' : '🔴 истекла'})`,
     `Окончание: ${esc(u.subscription.expires_text)}`,
+    `Клон (2-е устройство): ${u.extra_device_slot ? '✅ выдан' : '—'}`,
   ];
   if (u.payments.length > 0) {
     lines.push('', '<b>Последние платежи:</b>');
@@ -114,7 +115,7 @@ export async function handleSearchInput(ctx: Ctx, username: string): Promise<voi
   }
 
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username: res.user.username });
-  await reply(ctx, userCardText(res.user), adminUserCardKeyboard());
+  await reply(ctx, userCardText(res.user), adminUserCardKeyboard(res.user.extra_device_slot));
 }
 
 /** Re-renders the currently open card — used as the "back"/cancel target from card sub-actions. */
@@ -170,6 +171,29 @@ export async function confirmRemove(ctx: Ctx): Promise<void> {
 
   const res = await ctx.adminApi.remove(username);
   await logAdminAction(ctx.env, ctx.telegramId, 'remove', { username, success: res.success });
+  await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
+  await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+}
+
+/**
+ * "🧬 Выдать клона" на карточке пользователя — ручная выдача второго
+ * устройства без покупки (см. mod/admin/bot.php issue_device_slot). Не
+ * путать с grant_device_slot, который вызывается только воркером после
+ * реальной оплаты ЮMoney — здесь платежа нет и не создаётся запись в
+ * payments[].
+ */
+export async function askGrantDeviceSlot(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+  await reply(ctx, `Выдать клона (второе устройство) для <b>${esc(username)}</b> — без оплаты?`, confirmKeyboard('adm:devslot:yes', 'adm:card'));
+}
+
+export async function confirmGrantDeviceSlot(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+
+  const res = await ctx.adminApi.issueDeviceSlot(username);
+  await logAdminAction(ctx.env, ctx.telegramId, 'issue_device_slot', { username, success: res.success });
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
   await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
 }

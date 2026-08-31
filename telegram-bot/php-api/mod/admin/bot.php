@@ -192,6 +192,7 @@ if ($action === 'user') {
                     'expires_at' => $sub['expires_at'],
                     'expires_text' => $sub['expires_text'],
                 ],
+                'extra_device_slot' => !empty($user['extra_device_slot']),
                 'payments' => $payments,
             ],
         ]);
@@ -483,6 +484,55 @@ if ($action === 'grant_device_slot') {
     }
 
     bot_json(['success' => true, 'message' => $message, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+// ============================================================
+// ISSUE_DEVICE_SLOT — выдать клона вручную из админки, без покупки. Тот же
+// принцип, что у issue относительно record_payment: ручная выдача ничего
+// не пишет в payments[] и не начисляет реферальный бонус — это не платёж,
+// в отличие от grant_device_slot (вызывается только по факту оплаты
+// ЮMoney через воркер). Идемпотентна — повторный вызов на уже выданном
+// клоне отвечает `already_granted`, а не выдаёт второй раз.
+// ============================================================
+
+if ($action === 'issue_device_slot') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($username): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                if (!empty($user['extra_device_slot'])) {
+                    return [$users, ['error' => 'already_granted']];
+                }
+                $user['extra_device_slot'] = true;
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'not_found']];
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') === 'not_found') bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
+    if (($result['error'] ?? '') === 'already_granted') bot_json(['success' => false, 'error' => 'Уже выдано.'], 409);
+
+    log_action("Admin issue_device_slot: {$username}");
+    $notificationId = notify_user_event(
+        strtolower($username),
+        '🧬 Клон выдан',
+        'Вам открыт доступ ко второму устройству — можно привязать его в любой момент, пока активна подписка.'
+    );
+
+    bot_json(['success' => true, 'message' => 'Клон выдан.', 'notification_id' => $notificationId]);
 }
 
 // ============================================================

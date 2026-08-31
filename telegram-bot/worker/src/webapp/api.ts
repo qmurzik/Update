@@ -186,6 +186,7 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
     case 'admin_users':
     case 'admin_user':
     case 'admin_issue':
+    case 'admin_issue_device_slot':
     case 'admin_remove':
     case 'admin_delete_user':
     case 'admin_send_notification':
@@ -221,6 +222,9 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
 
     case 'admin_issue':
       return json(await adminApi.issue(String(body.username ?? ''), Number(body.days ?? 0)));
+
+    case 'admin_issue_device_slot':
+      return json(await adminApi.issueDeviceSlot(String(body.username ?? '')));
 
     case 'admin_remove':
       return json(await adminApi.remove(String(body.username ?? '')));

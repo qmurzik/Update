@@ -232,6 +232,7 @@ export interface AdminUserCard {
   telegram_id: string;
   device_id: string;
   subscription: { plan: string; active: boolean; days_left: number; expires_text: string };
+  extra_device_slot: boolean;
   payments: Array<{ plan: string; amount: number; date_text: string }>;
 }
 
@@ -328,6 +329,18 @@ export class QmodsAdminApi {
       { username, amount },
       'POST'
     );
+  }
+
+  /**
+   * Manually grants the "клон" from the admin panel — no payment involved,
+   * mirrors `issue()` vs `recordPayment()`: doesn't touch payments[] or the
+   * referral bonus (see mod/admin/bot.php issue_device_slot). Distinct from
+   * grantDeviceSlot(), which is only ever called from finalizePayment()
+   * after a real ЮMoney confirmation. See handlers/admin.ts
+   * askGrantDeviceSlot/confirmGrantDeviceSlot.
+   */
+  issueDeviceSlot(username: string) {
+    return callApi<{ message: string; notification_id?: string }>(this.url, this.token, 'issue_device_slot', { username }, 'POST');
   }
 
   /** "Кто/когда/что купил" alerts queued by notify_admin_payment_event() — see index.ts deliverPendingPaymentAlerts. */
