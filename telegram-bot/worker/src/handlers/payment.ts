@@ -1,6 +1,7 @@
 import type { Env } from '../config';
 import type { Ctx } from './context';
 import { backButton, planPickerKeyboard, payOrderKeyboard } from '../telegram/keyboards';
+import type { InlineKeyboard } from '../telegram/types';
 import { DIVIDER, esc, money } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
@@ -8,6 +9,7 @@ import { createPaymentOrder, getPaymentOrder } from '../db';
 import type { PaymentOrderRow } from '../db';
 import { QmodsAdminApi, QmodsUserApi } from '../qmodsApi';
 import { buildQuickpayUrl } from '../yoomoney';
+import { appDownloadButton } from './app';
 
 /** Shows the plan list ("💳 Купить подписку") — the plans() action existed but was never wired up client-side before this. */
 export async function askBuyPlan(ctx: Ctx): Promise<void> {
@@ -122,12 +124,22 @@ export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void>
   }
 
   if (order.status === 'paid') {
-    await ensureDeviceSlotGranted(ctx.env, ctx.telegramId, order);
-    const message =
-      order.plan_id === DEVICE_SLOT_PLAN_ID
-        ? '✅ Оплата подтверждена! Клон активирован — второе устройство можно привязать в любой момент, в разделе «⚙️ Устройства».'
-        : `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — пользуйтесь на здоровье, а я пока присмотрю за остальным.`;
-    await reply(ctx, message, backButton(order.plan_id === DEVICE_SLOT_PLAN_ID ? 'm:devices' : 'm:main'));
+    if (order.plan_id === DEVICE_SLOT_PLAN_ID) {
+      await ensureDeviceSlotGranted(ctx.env, ctx.telegramId, order);
+      const downloadRow = appDownloadButton(await ctx.api.appRelease());
+      const kb: InlineKeyboard = downloadRow ? [downloadRow, ...backButton('m:devices')] : backButton('m:devices');
+      await reply(
+        ctx,
+        '✅ Оплата подтверждена! Клон активирован — второе устройство можно привязать в любой момент. Установите на него то же приложение QMods, что и на первом.',
+        kb
+      );
+      return;
+    }
+    await reply(
+      ctx,
+      `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — пользуйтесь на здоровье, а я пока присмотрю за остальным.`,
+      backButton('m:main')
+    );
     return;
   }
 

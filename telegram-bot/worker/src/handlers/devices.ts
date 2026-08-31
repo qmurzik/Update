@@ -4,6 +4,7 @@ import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
 import { countActiveDeviceTokens, revokeDeviceTokensForUsername } from '../db';
+import { appDownloadButton } from './app';
 
 function fmtDate(ts: number): string {
   if (!ts) return '—';
@@ -19,6 +20,12 @@ export async function showDevices(ctx: Ctx): Promise<void> {
   const username = me.user!.username;
   const maxDevices = me.user!.max_devices ?? 1;
   const hasCloneSlot = !!me.user!.extra_device_slot;
+
+  // Скачать APK нужно для установки НА КЛОН (второе устройство) — то же
+  // приложение, что и на первом, отдельного билда для клона нет. Просим
+  // релиз только когда он реально пригодится, чтобы не тратить лишний
+  // round-trip на каждый показ "Устройств".
+  const downloadRow = hasCloneSlot ? appDownloadButton(await ctx.api.appRelease()) : null;
 
   // qmods.ru's own device_id field mirrors only ONE device (see mod/api/
   // bot.php `devices` action comment) — D1's device_tokens table is the
@@ -54,7 +61,7 @@ export async function showDevices(ctx: Ctx): Promise<void> {
       : '🧬 Можно купить второе устройство («клон») за 200 ₽ — работает, пока активна подписка.'
   );
 
-  await reply(ctx, lines.join('\n'), devicesKeyboard(activeTokenCount > 0, hasCloneSlot));
+  await reply(ctx, lines.join('\n'), devicesKeyboard(activeTokenCount > 0, hasCloneSlot, downloadRow));
 }
 
 export async function askRemoveDevice(ctx: Ctx): Promise<void> {

@@ -597,7 +597,8 @@ function removeDevice(id) {
 function renderDeviceSlotCard() {
   if (me && me.extra_device_slot) {
     return '<div class="card"><h3>' + hIcon('device') + 'Клон</h3>' +
-      '<p class="muted">🧬 Второе устройство куплено — можно привязать ещё одно приложение, пока активна подписка.</p></div>';
+      '<p class="muted">🧬 Второе устройство куплено — можно привязать ещё одно приложение, пока активна подписка. Установите на него то же приложение QMods, что и на первом.</p>' +
+      '<button class="btn" onclick="openApp()">⬇️ Скачать APK</button></div>';
   }
   return '<div class="card"><h3>' + hIcon('device') + 'Клон — второе устройство</h3>' +
     '<p class="muted">Разовая покупка навсегда: разрешает вход ещё с одного устройства одновременно, пока активна подписка.</p>' +

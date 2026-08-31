@@ -81,10 +81,11 @@ export const payOrderKeyboard = (url: string, orderId: string): InlineKeyboard =
   [{ text: '‹ Назад', callback_data: 'm:pay' }],
 ];
 
-export const devicesKeyboard = (hasDevice: boolean, hasCloneSlot: boolean): InlineKeyboard => {
+export const devicesKeyboard = (hasDevice: boolean, hasCloneSlot: boolean, downloadRow: InlineKeyboard[number] | null = null): InlineKeyboard => {
   const kb: InlineKeyboard = [];
   if (hasDevice) kb.push([{ text: '🗑 Отвязать устройство', callback_data: 'dev:rm:ask' }]);
   if (!hasCloneSlot) kb.push([{ text: '🧬 Купить клона — 200 ₽', callback_data: 'dev:clone' }]);
+  if (downloadRow) kb.push(downloadRow);
   kb.push([{ text: '‹ Назад', callback_data: 'm:main' }]);
   return kb;
 };

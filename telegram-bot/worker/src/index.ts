@@ -5,6 +5,7 @@ import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
 import { DEVICE_SLOT_PLAN_ID } from './handlers/payment';
+import { appDownloadButton } from './handlers/app';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
 import {
@@ -534,10 +535,13 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
       throw new Error(`grant_device_slot failed for order ${order.id}: ${res.error ?? 'unknown'}`);
     }
 
+    // Same apk as the first device — see handlers/app.ts appDownloadButton.
+    const downloadRow = appDownloadButton(await new QmodsUserApi(env).appRelease());
     const sent = await tg
       .sendMessage(
         order.telegram_id,
-        '✅ <b>Оплата получена!</b>\n\n🧬 Клон активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства».'
+        '✅ <b>Оплата получена!</b>\n\n🧬 Клон активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства». Установите на него то же приложение QMods, что и на первом.',
+        downloadRow ? [downloadRow] : undefined
       )
       .then(() => true)
       .catch((err) => {
