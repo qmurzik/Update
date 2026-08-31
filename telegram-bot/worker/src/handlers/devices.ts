@@ -3,7 +3,7 @@ import { confirmKeyboard, devicesKeyboard } from '../telegram/keyboards';
 import { DIVIDER, esc } from '../util';
 import { requireLinked } from './guard';
 import { reply } from './reply';
-import { hasActiveDeviceToken, revokeDeviceTokensForUsername } from '../db';
+import { countActiveDeviceTokens, revokeDeviceTokensForUsername } from '../db';
 
 function fmtDate(ts: number): string {
   if (!ts) return '—';
@@ -16,38 +16,45 @@ export async function showDevices(ctx: Ctx): Promise<void> {
 
   const res = await ctx.api.devices(ctx.telegramId);
   const devices = res.devices ?? [];
+  const username = me.user!.username;
+  const maxDevices = me.user!.max_devices ?? 1;
+  const hasCloneSlot = !!me.user!.extra_device_slot;
 
-  // A device_token can exist in D1 without qmods.ru's own device_id
-  // reflecting it (see db.ts revokeDeviceTokensForUsername) — checked only
-  // when qmods.ru shows nothing, so the unlink button (and ONE_DEVICE_PER_
-  // ACCOUNT's block on new pairings) isn't invisible/unreachable here.
-  const username = me.user?.username;
-  const orphanToken = devices.length === 0 && username ? await hasActiveDeviceToken(ctx.env, username) : false;
+  // qmods.ru's own device_id field mirrors only ONE device (see mod/api/
+  // bot.php `devices` action comment) — D1's device_tokens table is the
+  // real source of truth for how many are actually live, which matters now
+  // that an account can have up to 2 (see db.ts countActiveDeviceTokens).
+  const activeTokenCount = await countActiveDeviceTokens(ctx.env, username);
 
   const lines = ['<b>📱 Устройства</b>', DIVIDER, ''];
-  if (devices.length === 0 && !orphanToken) {
+  if (activeTokenCount === 0) {
     lines.push(
       '<blockquote>Устройство ещё не привязано</blockquote>',
       '',
       'Появится здесь само, как только вы первый раз войдёте в приложение QMods — я слежу.'
     );
-  } else if (devices.length === 0) {
-    lines.push(
-      '<blockquote>✅ Приложение привязано</blockquote>',
-      '',
-      'Само устройство здесь не показывается, но привязка активна и не даёт войти с другого — если нужно, отвяжите её ниже.'
-    );
   } else {
-    lines.push('<blockquote>✅ Устройство привязано</blockquote>', '');
-    for (const d of devices) {
+    lines.push(`<blockquote>✅ Привязано устройств: ${activeTokenCount}/${maxDevices}</blockquote>`, '');
+    if (devices.length > 0) {
+      const d = devices[0];
       lines.push(`ID: <code>${esc(d.id_short)}</code>`);
       lines.push(`Android: ${esc(d.android_version ?? 'неизвестно')}`);
       lines.push(`Добавлено: ${fmtDate(d.added_at)}`);
       lines.push(`Последний раз в сети: ${fmtDate(d.last_seen)}`);
+    } else {
+      lines.push('Само устройство здесь не показывается, но привязка активна.');
     }
+    if (activeTokenCount > 1) lines.push('', 'Показано последнее устройство — остальные тоже активны. Отвязка снимает все сразу.');
   }
 
-  await reply(ctx, lines.join('\n'), devicesKeyboard(devices.length > 0 || orphanToken));
+  lines.push(
+    '',
+    hasCloneSlot
+      ? '🧬 Клон куплен — можно входить одновременно с двух устройств, пока активна подписка.'
+      : '🧬 Можно купить второе устройство («клон») за 200 ₽ — работает, пока активна подписка.'
+  );
+
+  await reply(ctx, lines.join('\n'), devicesKeyboard(activeTokenCount > 0, hasCloneSlot));
 }
 
 export async function askRemoveDevice(ctx: Ctx): Promise<void> {

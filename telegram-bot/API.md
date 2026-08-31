@@ -44,12 +44,19 @@ form-data или query-string (объединяются, JSON-тело имее�
     "status": "active",
     "subscription": {"plan": "premium", "active": true, "days_left": 12, "expires_at": 173..., "expires_text": "…"},
     "device": {"linked": true, "id": "…"},
+    "extra_device_slot": false, "max_devices": 1,
     "payments": [{"plan": "m1", "amount": 499, "date": 173..., "date_text": "…"}],
     "level": {"code": "vip", "title": "VIP", "icon": "💎", "perks": "…"},
     "achievements_unlocked": 5, "achievements_total": 13,
     "ref_count": 3
   }
 }
+```
+`extra_device_slot`/`max_devices` *(новое)* — куплен ли «клон» (второе
+устройство, см. `grant_device_slot` ниже) и итоговый лимит устройств
+аккаунта (1 или 2). Сам лимит проверяет и считает воркер по количеству
+живых `device_token` в D1, не эта пара полей — `max_devices` только
+источник правды для него.
 ```
 Если не привязан: `{"success": true, "linked": false, "user": null}`.
 
@@ -264,6 +271,20 @@ user_id, notification_id}` — `user_id`/`notification_id` нужны тольк
 `bot_award_referral_bonus()`: если это ПЕРВАЯ оплата покупателя и у него
 есть `referred_by`, приглашавшему начисляется +3 дня, и он получает
 персональное уведомление «🎁 Бонус за приглашение».
+
+### `grant_device_slot` (POST) *(новое)*
+**Параметры:** `username`, `amount`. Покупка «клона» — навсегда выставляет
+флаг `extra_device_slot` (см. поле `max_devices` в `me`), поднимая лимит
+устройств аккаунта с 1 до 2. В отличие от `record_payment` **не трогает**
+`subscription.expires_at` — только дописывает запись в `user.payments[]`
+(для истории/выручки) и, как и `record_payment`, атомарно проверяет
+`bot_award_referral_bonus()`. Вызывается ТОЛЬКО воркером
+(`finalizePayment()` в `worker/src/index.ts`), веткой по
+`order.plan_id === 'device_slot'` — см. README «Лимит устройств и „клон“».
+Повторный вызов для уже купившего аккаунта отвечает `{success: false,
+error: 'Уже куплено.'}` (`409`). Отдаёт `{success, message, user_id,
+notification_id}` — те же поля, что и `record_payment`, для того же
+`ack_telegram_push`.
 
 ### `remove` (POST)
 **Параметры:** `username`. Снимает подписку и отвязывает устройство.

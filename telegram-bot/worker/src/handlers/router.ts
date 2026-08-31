@@ -13,7 +13,7 @@ import { showProfile } from './profile';
 import { showSubscription } from './subscription';
 import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
 import { showPayments } from './payments';
-import { askBuyPlan, checkOrderStatus, handleBuyPlan, handlePaidReturn } from './payment';
+import { askBuyPlan, checkOrderStatus, handleBuyDeviceSlot, handleBuyPlan, handlePaidReturn } from './payment';
 import { markAllRead, showNotifications } from './notifications';
 import { askSupportMessage, handleSupportMessageInput, showSupport } from './support';
 import { showAchievements } from './achievements';
@@ -75,6 +75,7 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'reg:cancel': cancelRegister,
   'dev:rm:ask': askRemoveDevice,
   'dev:rm:yes': confirmRemoveDevice,
+  'dev:clone': handleBuyDeviceSlot,
   'notif:readall': markAllRead,
   'adm:menu': showAdminMenu,
   'adm:stats': showStats,

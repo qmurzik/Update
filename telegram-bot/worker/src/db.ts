@@ -107,10 +107,10 @@ export async function getDevicePairing(env: Env, code: string): Promise<DevicePa
   return row;
 }
 
-/** ONE_DEVICE_PER_ACCOUNT: true if `username` already has a live device_token. */
-export async function hasActiveDeviceToken(env: Env, username: string): Promise<boolean> {
-  const row = await env.DB.prepare('SELECT 1 FROM device_tokens WHERE username = ? LIMIT 1').bind(username).first();
-  return row !== null;
+/** Live device_token count for `username` — the basis for the device-cap check in claimDevicePairing() below. */
+export async function countActiveDeviceTokens(env: Env, username: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) as c FROM device_tokens WHERE username = ?').bind(username).first<{ c: number }>();
+  return row?.c ?? 0;
 }
 
 export type ClaimResult = { ok: true; token: string } | { ok: false; reason: 'invalid' | 'device_limit' };
@@ -120,12 +120,16 @@ export type ClaimResult = { ok: true; token: string } | { ok: false; reason: 'in
  * chat's Telegram account is confirmed linked to `username`. Mints a new
  * long-lived device_token and marks the pairing claimed.
  *
- * ONE_DEVICE_PER_ACCOUNT: an account may only have one live device_token at
- * a time — a second pairing attempt is rejected (not silently replaced),
- * so the app must be unlinked via "Устройства" before a new one can pair.
- * The pairing row is marked 'rejected' (with a reason) rather than left
- * 'pending' so the app's poll sees this immediately instead of just timing
- * out after 5 minutes.
+ * DEVICE_PER_ACCOUNT cap: an account may have at most `maxDevices` live
+ * device_tokens at a time (default 1) — a pairing attempt beyond that is
+ * rejected (not silently replaced), so the app must either be unlinked via
+ * "Устройства" or the account must buy a second slot ("клон", see
+ * mod/admin/bot.php grant_device_slot / handlers/payment.ts
+ * handleBuyDeviceSlot) before a new one can pair. Callers pass the
+ * account's actual cap — see handlers/devicePair.ts, which reads it off
+ * `me.user.max_devices`. The pairing row is marked 'rejected' (with a
+ * reason) rather than left 'pending' so the app's poll sees this
+ * immediately instead of just timing out after 5 minutes.
  *
  * Returns `{ ok: false, reason: 'invalid' }` for an unknown/expired/
  * already-claimed code — best-effort double-claim protection via the WHERE
@@ -133,11 +137,11 @@ export type ClaimResult = { ok: true; token: string } | { ok: false; reason: 'in
  * real collision would need two claims landing within milliseconds of each
  * other on the same freshly-generated code).
  */
-export async function claimDevicePairing(env: Env, code: string, username: string): Promise<ClaimResult> {
+export async function claimDevicePairing(env: Env, code: string, username: string, maxDevices = 1): Promise<ClaimResult> {
   const row = await getDevicePairing(env, code);
   if (!row || row.status !== 'pending') return { ok: false, reason: 'invalid' };
 
-  if (await hasActiveDeviceToken(env, username)) {
+  if ((await countActiveDeviceTokens(env, username)) >= maxDevices) {
     await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'device_limit' WHERE code = ? AND status = 'pending'")
       .bind(code)
       .run();

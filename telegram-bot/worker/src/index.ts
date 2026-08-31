@@ -4,6 +4,7 @@ import { verifyWebhookSecret } from './security';
 import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
+import { DEVICE_SLOT_PLAN_ID } from './handlers/payment';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
 import {
@@ -521,12 +522,40 @@ async function deliverPendingPaymentAlerts(env: Env): Promise<void> {
  */
 async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> {
   const adminApi = new QmodsAdminApi(env);
+  const tg = new TelegramClient(env);
+
+  // "Клон" — a device-cap purchase, not a subscription extension. Branched
+  // separately since it calls a different PHP action (grant_device_slot,
+  // not record_payment) and doesn't extend subscription.expires_at — see
+  // handlers/payment.ts handleBuyDeviceSlot.
+  if (order.plan_id === DEVICE_SLOT_PLAN_ID) {
+    const res = await adminApi.grantDeviceSlot(order.username, order.amount);
+    if (!res.success) {
+      throw new Error(`grant_device_slot failed for order ${order.id}: ${res.error ?? 'unknown'}`);
+    }
+
+    const sent = await tg
+      .sendMessage(
+        order.telegram_id,
+        '✅ <b>Оплата получена!</b>\n\n🧬 Клон активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства».'
+      )
+      .then(() => true)
+      .catch((err) => {
+        console.error('device slot payment confirmation delivery failed', order.telegram_id, err);
+        return false;
+      });
+
+    if (sent && res.notification_id && res.user_id) {
+      await adminApi.ackTelegramPush([{ notification_id: res.notification_id, user_id: res.user_id }]).catch(() => undefined);
+    }
+    return;
+  }
+
   const res = await adminApi.recordPayment(order.username, order.plan_title, order.days, order.amount);
   if (!res.success) {
     throw new Error(`record_payment failed for order ${order.id}: ${res.error ?? 'unknown'}`);
   }
 
-  const tg = new TelegramClient(env);
   const sent = await tg
     .sendMessage(order.telegram_id, `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`)
     .then(() => true)

@@ -569,23 +569,67 @@ function renderDevices() {
   el.innerHTML = '<div class="skeleton"></div>';
   api('devices', {}).then(function (res) {
     var devices = (res && res.devices) || [];
+    var html = '';
     if (devices.length === 0) {
-      el.innerHTML = '<div class="card" style="text-align:center">' +
+      html = '<div class="card" style="text-align:center">' +
         '<img class="mascot-sm" src="__KIRA_EMPTY__" alt="" onerror="this.style.display=\\'none\\'">' +
         '<h3 style="justify-content:center">' + hIcon('device') + 'Устройства</h3><p class="muted">Устройство ещё не привязано.</p></div>';
-      return;
+    } else {
+      var d = devices[0];
+      html = '<div class="card"><h3>' + hIcon('device') + 'Устройство</h3>' +
+        row('ID', '<code>' + esc(d.id_short) + '</code>') +
+        row('Android', esc(d.android_version || 'неизвестно')) +
+        '<button class="btn danger" onclick="removeDevice(' + jsStr(d.id) + ')">🗑 Отвязать устройство</button>' +
+        '</div>';
     }
-    var d = devices[0];
-    el.innerHTML = '<div class="card"><h3>' + hIcon('device') + 'Устройство</h3>' +
-      row('ID', '<code>' + esc(d.id_short) + '</code>') +
-      row('Android', esc(d.android_version || 'неизвестно')) +
-      '<button class="btn danger" onclick="removeDevice(' + jsStr(d.id) + ')">🗑 Отвязать устройство</button>' +
-      '</div>';
+    html += renderDeviceSlotCard();
+    el.innerHTML = html;
   });
 }
 function removeDevice(id) {
   if (!confirm('Отвязать устройство?')) return;
   api('device_remove', { device_id: id }).then(function () { loaded.devices = false; switchTab('devices'); });
+}
+
+// "Клон" — see handlers/payment.ts handleBuyDeviceSlot / PHP grant_device_slot.
+// me is the same global populated on load — extra_device_slot comes
+// straight from mod/api/bot.php's me action.
+function renderDeviceSlotCard() {
+  if (me && me.extra_device_slot) {
+    return '<div class="card"><h3>' + hIcon('device') + 'Клон</h3>' +
+      '<p class="muted">🧬 Второе устройство куплено — можно привязать ещё одно приложение, пока активна подписка.</p></div>';
+  }
+  return '<div class="card"><h3>' + hIcon('device') + 'Клон — второе устройство</h3>' +
+    '<p class="muted">Разовая покупка навсегда: разрешает вход ещё с одного устройства одновременно, пока активна подписка.</p>' +
+    '<button class="btn" onclick="buyDeviceSlot()">🧬 Купить клона — 200 ₽</button></div>';
+}
+
+var deviceSlotPollTimer = null;
+function buyDeviceSlot() {
+  haptic('light');
+  api('pay_start', { plan_id: 'device_slot' }).then(function (res) {
+    if (!res || !res.success) { alert('Не удалось создать платёж' + (res && res.error ? ': ' + res.error : '')); return; }
+    if (tg && tg.openLink) { tg.openLink(res.url); } else { window.open(res.url, '_blank'); }
+    if (deviceSlotPollTimer) clearInterval(deviceSlotPollTimer);
+    var attempts = 0;
+    deviceSlotPollTimer = setInterval(function () {
+      attempts++;
+      api('pay_status', { order_id: res.order_id }).then(function (statusRes) {
+        if (statusRes && statusRes.success && statusRes.status === 'paid') {
+          clearInterval(deviceSlotPollTimer);
+          deviceSlotPollTimer = null;
+          haptic('light');
+          api('me', {}).then(function (m) {
+            if (m && m.user) me = m.user;
+            renderDevices();
+          });
+        } else if (attempts >= 20) {
+          clearInterval(deviceSlotPollTimer);
+          deviceSlotPollTimer = null;
+        }
+      });
+    }, 3000);
+  });
 }
 
 function copyText(text) {

@@ -2,6 +2,7 @@ import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
 import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
+import { DEVICE_SLOT_PLAN_ID, DEVICE_SLOT_PRICE, DEVICE_SLOT_TITLE } from '../handlers/payment';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
 import { extractInitData, validateInitData } from './validate';
@@ -123,8 +124,31 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
       const me = await api.me(telegramId);
       if (!me.linked || !me.user) return json({ success: false, error: 'Not linked' }, 403);
 
-      const plansRes = await api.plans();
       const planId = String(body.plan_id ?? '');
+
+      // "Клон" isn't in PLANS/plans() — a device-cap purchase, not a
+      // subscription tariff. See handlers/payment.ts handleBuyDeviceSlot
+      // for the bot-chat equivalent of this branch.
+      if (planId === DEVICE_SLOT_PLAN_ID) {
+        if (me.user.extra_device_slot) return json({ success: false, error: 'Уже куплено' }, 409);
+        const orderId = await createPaymentOrder(env, {
+          telegramId,
+          username: me.user.username,
+          planId: DEVICE_SLOT_PLAN_ID,
+          planTitle: DEVICE_SLOT_TITLE,
+          days: 0,
+          amount: DEVICE_SLOT_PRICE,
+        });
+        const url = buildQuickpayUrl(env, {
+          orderId,
+          amount: DEVICE_SLOT_PRICE,
+          description: `QMods — ${DEVICE_SLOT_TITLE}`,
+          successUrl: `https://t.me/${env.BOT_USERNAME}?start=paid_${orderId}`,
+        });
+        return json({ success: true, order_id: orderId, url });
+      }
+
+      const plansRes = await api.plans();
       const plan = (plansRes.plans ?? []).find((p) => p.id === planId);
       if (!plan) return json({ success: false, error: 'Тариф не найден' }, 404);
 

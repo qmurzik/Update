@@ -67,6 +67,8 @@ export class QmodsUserApi {
         status: string;
         subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string };
         device: { linked: boolean; id: string };
+        extra_device_slot: boolean;
+        max_devices: number;
         payments: Array<{ plan: string; amount: number; date: number; date_text: string }>;
         level: { code: string; title: string; icon: string; perks: string };
         achievements_unlocked: number;
@@ -306,6 +308,24 @@ export class QmodsAdminApi {
       this.token,
       'record_payment',
       { username, plan, days, amount },
+      'POST'
+    );
+  }
+
+  /**
+   * Grants the "клон" — a one-time purchase that raises the account's
+   * device cap from 1 to 2 forever (see mod/admin/bot.php
+   * grant_device_slot / db.ts claimDevicePairing). Unlike recordPayment(),
+   * never touches subscription.expires_at. Fails with `already_granted` if
+   * called twice for the same account (see handlers/payment.ts
+   * handleBuyDeviceSlot, which also checks this before creating an order).
+   */
+  grantDeviceSlot(username: string, amount: number) {
+    return callApi<{ message: string; user_id: string; notification_id: string }>(
+      this.url,
+      this.token,
+      'grant_device_slot',
+      { username, amount },
       'POST'
     );
   }

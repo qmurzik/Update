@@ -31,12 +31,17 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     return;
   }
 
-  const result = await claimDevicePairing(ctx.env, code, me.user.username);
+  const maxDevices = me.user.max_devices ?? 1;
+  const result = await claimDevicePairing(ctx.env, code, me.user.username, maxDevices);
   if (!result.ok) {
     if (result.reason === 'device_limit') {
+      const extra =
+        maxDevices > 1
+          ? ''
+          : ' Либо купите второе устройство («клон») за 200 ₽ в разделе «⚙️ Устройства» — тогда войти можно будет сразу с двух.';
       await reply(
         ctx,
-        '❌ К этому аккаунту уже привязано одно устройство. Сначала отвяжите его в разделе «⚙️ Устройства», затем откройте ссылку из нового приложения ещё раз.',
+        `❌ К этому аккаунту уже привязано максимум устройств (${maxDevices}). Сначала отвяжите одно в разделе «⚙️ Устройства», затем откройте ссылку из нового приложения ещё раз.${extra}`,
         mainMenu(ctx.env, true, false)
       );
       return;

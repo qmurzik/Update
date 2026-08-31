@@ -409,6 +409,83 @@ if ($action === 'record_payment') {
 }
 
 // ============================================================
+// GRANT_DEVICE_SLOT — покупка "клона": разово поднимает лимит устройств
+// аккаунта с 1 до 2 навсегда (флаг extra_device_slot), в отличие от
+// record_payment НЕ трогает subscription.expires_at — само по себе не
+// продлевает подписку. То, что клон "работает, пока активна подписка" не
+// требует отдельной проверки здесь: device_subscription и так гасит доступ
+// любому устройству, если подписка не активна — см. android-client/README.md.
+// Фактический лимит устройств проверяет и считает воркер по количеству
+// живых device_token в D1 (worker/src/db.ts claimDevicePairing), опираясь
+// на max_devices из действия `me` выше.
+// ============================================================
+
+if ($action === 'grant_device_slot') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $amount = (float)($request['amount'] ?? 0);
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+    if ($amount <= 0) {
+        bot_json(['success' => false, 'error' => 'Некорректная сумма.'], 400);
+    }
+
+    $userId = '';
+    $refResult = ['awarded' => false];
+    [$ok, $result] = update_users(function (array $users) use ($username, $amount, &$userId, &$refResult): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                $userId = (string)($user['id'] ?? '');
+                if (!empty($user['extra_device_slot'])) {
+                    return [$users, ['error' => 'already_granted']];
+                }
+                $user['extra_device_slot'] = true;
+                if (!isset($user['payments']) || !is_array($user['payments'])) {
+                    $user['payments'] = [];
+                }
+                $user['payments'][] = ['plan' => 'Клон (второе устройство)', 'amount' => $amount, 'date' => time()];
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'not_found']];
+
+        // Тот же бонус приглашавшему, что и в record_payment — покупка
+        // клона тоже платёж, "первая оплата" считается по общему payments[].
+        $refResult = bot_award_referral_bonus($users, strtolower(trim($username)));
+
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') === 'not_found') bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
+    if (($result['error'] ?? '') === 'already_granted') bot_json(['success' => false, 'error' => 'Уже куплено.'], 409);
+
+    $message = 'Оплата принята. Клон активирован — второе устройство доступно, пока активна подписка.';
+    log_action("Telegram bot payment: {$username} +device_slot, {$amount} RUB (clone)");
+    $notificationId = notify_user_event(strtolower($username), '🧬 Клон активирован', $message);
+    notify_admin_payment_event(strtolower($username), 'Клон (второе устройство)', $amount, 0);
+
+    if (!empty($refResult['awarded'])) {
+        $refDays = (int)$refResult['days'];
+        log_action("Telegram bot payment: referral bonus +{$refDays}d to {$refResult['referrer']} for {$username}");
+        notify_user_event(
+            strtolower((string)$refResult['referrer']),
+            '🎁 Бонус за приглашение',
+            "Ваш друг {$username} оплатил подписку — начислила вам +{$refDays} дн."
+        );
+    }
+
+    bot_json(['success' => true, 'message' => $message, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+// ============================================================
 // REMOVE — снять подписку и устройство
 // ============================================================
 

@@ -266,6 +266,14 @@ if ($action === 'me') {
                     'linked' => !empty($user['device_id']),
                     'id' => (string)($user['device_id'] ?? ''),
                 ],
+                // Клон — разовая покупка (см. grant_device_slot в
+                // mod/admin/bot.php), навсегда поднимает лимит устройств до
+                // 2. Сам лимит считает и проверяет воркер по количеству
+                // живых device_token в D1 (worker/src/db.ts
+                // claimDevicePairing), это поле только источник правды для
+                // него — здесь ничего не считается и не хранится отдельно.
+                'extra_device_slot' => !empty($user['extra_device_slot']),
+                'max_devices' => 1 + (!empty($user['extra_device_slot']) ? 1 : 0),
                 'payments' => $payments,
                 'level' => [
                     'code' => $levelCode,
