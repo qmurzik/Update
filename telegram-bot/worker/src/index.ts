@@ -565,8 +565,12 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
   // own. order.telegram_id/order.username are the same person for a normal
   // self-purchase, so this mismatch is exactly how we tell the two apart
   // without a schema change — see handlers/curator.ts handleBuyForWard.
-  const buyerMe = await new QmodsUserApi(env).me(order.telegram_id);
-  const boughtForSelf = (buyerMe.user?.username ?? '').toLowerCase() === order.username.toLowerCase();
+  // Never let a failure to fetch the BUYER's own profile here block the
+  // confirmation message for a purchase that already succeeded server-side
+  // (recordPayment above) — default to the common case (self-purchase) on
+  // any lookup failure instead of leaving the whole function to reject.
+  const buyerMe = await new QmodsUserApi(env).me(order.telegram_id).catch(() => null);
+  const boughtForSelf = !buyerMe?.user || buyerMe.user.username.toLowerCase() === order.username.toLowerCase();
   const confirmText = boughtForSelf
     ? `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`
     : `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» для <b>${esc(order.username)}</b> активирована на ${order.days} дн. Спасибо, что заботитесь о своих подопечных!`;
