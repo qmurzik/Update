@@ -285,6 +285,7 @@ export const APP_HTML = `<!doctype html>
     <div id="tab-ach" class="tabpanel hidden"></div>
     <div id="tab-pay" class="tabpanel hidden"></div>
     <div id="tab-notif" class="tabpanel hidden"></div>
+    <div id="tab-curator" class="tabpanel hidden"></div>
     <div id="tab-admin" class="tabpanel hidden"></div>
   </div>
 
@@ -296,6 +297,7 @@ export const APP_HTML = `<!doctype html>
     <button class="tab" data-tab="ach" onclick="switchTab('ach')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M7 5H4a1 1 0 0 0-1 1c0 2.5 1.6 4.5 4 4.9M17 5h3a1 1 0 0 1 1 1c0 2.5-1.6 4.5-4 4.9"></path></svg>Награды</button>
     <button class="tab" data-tab="pay" onclick="switchTab('pay')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"></rect><path d="M2.5 9.5h19"></path></svg>Оплата</button>
     <button class="tab" data-tab="notif" onclick="switchTab('notif')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>Увед.</button>
+    <button class="tab hidden" data-tab="curator" id="curatorTabBtn" onclick="switchTab('curator')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"></circle><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"></path><path d="M16 3.2a3 3 0 0 1 0 5.7M21 20c0-2.5-1.8-4.6-4.3-5.5"></path></svg>Куратор</button>
     <button class="tab hidden" data-tab="admin" id="adminTabBtn" onclick="switchTab('admin')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"></path></svg>Админ</button>
   </div>
 </div>
@@ -390,6 +392,7 @@ function boot() {
     me = res.user;
     isAdminUser = !!res.is_admin;
     if (isAdminUser) document.getElementById('adminTabBtn').classList.remove('hidden');
+    if (me.is_curator || me.curator_username) document.getElementById('curatorTabBtn').classList.remove('hidden');
     show('app');
     renderHero();
     renderProfile();
@@ -444,7 +447,7 @@ var loaded = {};
 
 function switchTab(name) {
   haptic('light');
-  ['profile', 'sub', 'devices', 'ach', 'pay', 'notif', 'admin'].forEach(function (t) {
+  ['profile', 'sub', 'devices', 'ach', 'pay', 'notif', 'curator', 'admin'].forEach(function (t) {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
   });
   var activeBtn = null;
@@ -462,6 +465,7 @@ function switchTab(name) {
     if (name === 'ach') renderAch();
     if (name === 'pay') renderPay();
     if (name === 'notif') renderNotif();
+    if (name === 'curator') renderCurator();
     if (name === 'admin') renderAdmin();
   }
   updateMainButton(name);
@@ -794,6 +798,122 @@ function renderNotif() {
 }
 function markAllRead() { loaded.notif = false; switchTab('notif'); }
 
+// "Кураторство" — see README "Кураторы", handlers/curator.ts (the chat-bot
+// equivalent of everything below). is_curator/curator_username come
+// straight from the global me set at boot(); tab visibility itself is
+// toggled there too (curatorTabBtn).
+var curatorWards = [];
+
+function renderCurator() {
+  var el = document.getElementById('tab-curator');
+  el.innerHTML = '<div class="skeleton"></div>';
+  var calls = me.is_curator ? [api('curator_wards', {})] : [];
+  Promise.all(calls).then(function (results) {
+    var html = '';
+
+    if (me.is_curator) {
+      curatorWards = (results[0] && results[0].wards) || [];
+      html += '<div class="card"><h3>' + hIcon('users') + 'Подопечные (' + curatorWards.length + ')</h3>';
+      if (curatorWards.length === 0) {
+        html += '<p class="muted">Пока никого — пригласите первого подопечного.</p>';
+      } else {
+        curatorWards.forEach(function (w) {
+          html += row(esc(w.username), w.subscription.active ? '🟢 до ' + esc(w.subscription.expires_text) : '🔴 не активна');
+        });
+      }
+      html += '<button class="btn primary" onclick="curatorInvite()">➕ Пригласить подопечного</button>' +
+        '<div id="curatorInviteLink"></div></div>';
+
+      if (curatorWards.length > 0) {
+        html += '<div class="card"><h3>' + hIcon('card') + 'Купить подписку подопечному</h3>' +
+          '<select id="curatorWardSelect">' + curatorWards.map(function (w) {
+            return '<option value="' + esc(w.username) + '">' + esc(w.username) + '</option>';
+          }).join('') + '</select>' +
+          '<div id="curatorPlanList"><div class="skeleton"></div></div></div>';
+      }
+    }
+
+    if (me.curator_username) {
+      html += '<div class="card"><h3>' + hIcon('device') + 'Ваш куратор</h3>' +
+        '<p class="muted">' + esc(me.curator_username) + ' — видит вашу подписку и устройство и может продлевать подписку.</p>' +
+        '<button class="btn danger" onclick="curatorUnlinkSelf()">❌ Отвязать куратора</button></div>';
+    }
+
+    if (!me.is_curator && !me.curator_username) {
+      html = '<div class="card"><p class="muted">Куратор — доверенный человек, который может продлевать вашу подписку и видеть её срок и привязанное устройство, но только с вашего согласия. Если вам прислали ссылку-приглашение — просто откройте её в Telegram.</p></div>';
+    }
+
+    el.innerHTML = html;
+    if (me.is_curator && curatorWards.length > 0) renderCuratorPlans();
+  });
+}
+
+function renderCuratorPlans() {
+  var el = document.getElementById('curatorPlanList');
+  api('plans', {}).then(function (res) {
+    var plans = (res && res.success && res.plans) || [];
+    if (plans.length === 0) { el.innerHTML = '<p class="muted">Тарифы недоступны.</p>'; return; }
+    el.innerHTML = plans.map(function (p) {
+      return '<button class="plan-row" onclick="curatorBuy(' + jsStr(p.id) + ')">' +
+        '<div><div class="plan-title">' + esc(p.title) + '</div><div class="muted">' + p.days + ' дн.</div></div>' +
+        '<div class="plan-price">' + p.price + ' ₽</div></button>';
+    }).join('');
+  });
+}
+
+function curatorBuy(planId) {
+  var wardUsername = document.getElementById('curatorWardSelect').value;
+  haptic('light');
+  api('curator_buy_start', { username: wardUsername, plan_id: planId }).then(function (res) {
+    if (!res || !res.success) { alert('Не удалось создать платёж' + (res && res.error ? ': ' + res.error : '')); return; }
+    if (tg && tg.openLink) { tg.openLink(res.url); } else { window.open(res.url, '_blank'); }
+    watchCuratorOrder(res.order_id);
+  });
+}
+
+var curatorOrderPollTimer = null;
+function watchCuratorOrder(orderId) {
+  if (curatorOrderPollTimer) clearInterval(curatorOrderPollTimer);
+  var attempts = 0;
+  curatorOrderPollTimer = setInterval(function () {
+    attempts++;
+    api('pay_status', { order_id: orderId }).then(function (res) {
+      if (res && res.success && res.status === 'paid') {
+        clearInterval(curatorOrderPollTimer);
+        curatorOrderPollTimer = null;
+        haptic('light');
+        alert('✅ Оплата подтверждена!');
+        loaded.curator = false;
+        switchTab('curator');
+      } else if (attempts >= 20) {
+        clearInterval(curatorOrderPollTimer);
+        curatorOrderPollTimer = null;
+      }
+    });
+  }, 3000);
+}
+
+function curatorInvite() {
+  haptic('light');
+  api('curator_invite_start', {}).then(function (res) {
+    var el = document.getElementById('curatorInviteLink');
+    if (!res || !res.success) { el.innerHTML = '<p class="muted">Не удалось создать приглашение.</p>'; return; }
+    el.innerHTML = '<p class="muted" style="margin-top:10px">Отправьте эту ссылку человеку — откроется у него в Telegram, действует 10 минут:</p>' +
+      '<div class="copy-row"><code>' + esc(res.link) + '</code><button onclick="copyText(' + jsStr(res.link) + ')">Копия</button></div>';
+  });
+}
+
+function curatorUnlinkSelf() {
+  if (!confirm('Отвязать куратора?')) return;
+  api('curator_unlink', {}).then(function () {
+    api('me', {}).then(function (m) {
+      if (m && m.user) me = m.user;
+      loaded.curator = false;
+      switchTab('curator');
+    });
+  });
+}
+
 var adminUsers = [];
 
 function renderAdmin() {
@@ -801,9 +921,10 @@ function renderAdmin() {
   el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
   Promise.all([
     api('admin_stats', {}), api('admin_users', {}),
-    api('admin_get_app_version', {}), api('admin_get_site_auth_gate', {}), api('admin_get_app_release', {})
+    api('admin_get_app_version', {}), api('admin_get_site_auth_gate', {}), api('admin_get_app_release', {}),
+    api('admin_curators_list', {})
   ]).then(function (results) {
-    var sRes = results[0], uRes = results[1], avRes = results[2], sagRes = results[3], relRes = results[4];
+    var sRes = results[0], uRes = results[1], avRes = results[2], sagRes = results[3], relRes = results[4], curRes = results[5];
     var stats = (sRes && sRes.stats) || {};
     adminUsers = (uRes && uRes.users) || [];
 
@@ -827,6 +948,7 @@ function renderAdmin() {
       '<textarea id="bcText" rows="3" placeholder="Текст рассылки"></textarea>' +
       '<button class="btn primary" onclick="sendBroadcast()">📣 Отправить всем привязанным</button></div>';
 
+    html += curatorsCard(curRes);
     html += appReleaseCard(relRes);
     html += appVersionCard(avRes);
     html += siteAuthGateCard(sagRes);
@@ -834,6 +956,21 @@ function renderAdmin() {
     el.innerHTML = html;
     renderUserList(adminUsers);
   });
+}
+
+function curatorsCard(res) {
+  var curators = (res && res.curators) || [];
+  var html = '<div class="card"><h3>' + hIcon('users') + 'Кураторы (' + curators.length + ')</h3>';
+  if (curators.length === 0) {
+    html += '<p class="muted">Пока нет — назначьте через карточку пользователя.</p>';
+  } else {
+    curators.forEach(function (c) {
+      html += '<button class="user-row" onclick="selectAdminUser(' + jsStr(c.username) + ')">' +
+        '<span>👔 ' + esc(c.username) + '</span><span class="muted">подопечных: ' + c.ward_count + '</span></button>';
+    });
+  }
+  html += '</div>';
+  return html;
 }
 
 function fmtBytes(n) {
@@ -1022,7 +1159,9 @@ function renderUserDetail(u) {
     row('Устройство', u.device_id ? '✅' : '—') +
     row('Тариф', esc(u.subscription.plan) + ' (' + (u.subscription.active ? '🟢' : '🔴') + ')') +
     row('Окончание', esc(u.subscription.expires_text)) +
-    row('Клон (2-е устройство)', u.extra_device_slot ? '✅ выдан' : '—');
+    row('Клон (2-е устройство)', u.extra_device_slot ? '✅ выдан' : '—') +
+    row('Куратор (статус)', u.is_curator ? '👔 да' + (u.wards && u.wards.length ? ' (подопечных: ' + u.wards.length + ')' : '') : '—');
+  if (u.curator_username) html += row('Его куратор', esc(u.curator_username));
 
   if (u.payments && u.payments.length) {
     html += '<p class="muted" style="margin-top:8px"><b>Платежи:</b></p>';
@@ -1042,6 +1181,11 @@ function renderUserDetail(u) {
       '<button class="btn" onclick="adminGrantDeviceSlot(' + jsStr(u.username) + ')">🧬 Выдать клона</button>' +
       '</div>') +
     '<div class="admin-form">' +
+    '<button class="btn" onclick="adminSetCurator(' + jsStr(u.username) + ',' + (u.is_curator ? 'false' : 'true') + ')">' +
+    (u.is_curator ? '🚫 Снять кураторство' : '👔 Сделать куратором') + '</button>' +
+    (u.curator_username ? '<button class="btn" onclick="adminUnlinkWardCurator(' + jsStr(u.username) + ')">❌ Отвязать его куратора</button>' : '') +
+    '</div>' +
+    '<div class="admin-form">' +
     '<button class="btn" onclick="adminRemove(' + jsStr(u.username) + ')">🚫 Снять подписку</button>' +
     '<button class="btn danger" onclick="adminDelete(' + jsStr(u.username) + ')">🗑 Удалить аккаунт</button>' +
     '</div>' +
@@ -1053,6 +1197,25 @@ function renderUserDetail(u) {
 function adminGrantDeviceSlot(username) {
   if (!confirm('Выдать клона (второе устройство) для ' + username + ' без оплаты?')) return;
   api('admin_issue_device_slot', { username: username }).then(function (res) {
+    showAdminResult(res);
+    if (res.success) selectAdminUser(username);
+  });
+}
+
+function adminSetCurator(username, enabled) {
+  var msg = enabled
+    ? 'Назначить ' + username + ' куратором?'
+    : 'Снять статус куратора с ' + username + '? Все его подопечные будут отвязаны.';
+  if (!confirm(msg)) return;
+  api('admin_set_curator', { username: username, enabled: enabled }).then(function (res) {
+    showAdminResult(res);
+    if (res.success) selectAdminUser(username);
+  });
+}
+
+function adminUnlinkWardCurator(username) {
+  if (!confirm('Отвязать куратора у ' + username + '?')) return;
+  api('admin_unlink_curator', { username: username }).then(function (res) {
     showAdminResult(res);
     if (res.success) selectAdminUser(username);
   });

@@ -69,6 +69,8 @@ export class QmodsUserApi {
         device: { linked: boolean; id: string };
         extra_device_slot: boolean;
         max_devices: number;
+        is_curator: boolean;
+        curator_username: string | null;
         payments: Array<{ plan: string; amount: number; date: number; date_text: string }>;
         level: { code: string; title: string; icon: string; perks: string };
         achievements_unlocked: number;
@@ -224,6 +226,43 @@ export class QmodsUserApi {
       force_update: { required: boolean; message: string };
     }>(this.url, this.token, 'device_subscription', { username, version_code: versionCode });
   }
+
+  // ============================================================
+  // "Кураторство" — see README "Кураторы", handlers/curator.ts,
+  // worker/src/db.ts curator_invites (the ephemeral invite handshake this
+  // is downstream of).
+  // ============================================================
+
+  /**
+   * The ward's own consent, written straight to their qmods.ru record —
+   * only ever called from handleCuratorLinkConfirm() after the ward taps
+   * "Подтвердить" on the invite. `telegramId` is always the WARD's own —
+   * this can never be used to attach someone else's account.
+   */
+  setCuratorForWard(telegramId: string, curatorUsername: string) {
+    return callApi<{ curator_username?: string }>(this.url, this.token, 'set_curator_for_ward', { telegram_id: telegramId, curator_username: curatorUsername }, 'POST');
+  }
+
+  /** Ward-initiated self-service detach — no curator confirmation needed, consent can be withdrawn unilaterally at any time. */
+  unlinkCurator(telegramId: string) {
+    return callApi(this.url, this.token, 'unlink_curator', { telegram_id: telegramId }, 'POST');
+  }
+
+  /**
+   * A curator's own ward list — 403s server-side if `telegramId` isn't
+   * actually `is_curator`. Device info is intentionally a narrow subset
+   * (id_short, not the raw device_id/token) — see mod/api/bot.php
+   * curator_wards comment.
+   */
+  curatorWards(telegramId: string) {
+    return callApi<{
+      wards: Array<{
+        username: string;
+        subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string };
+        device: { linked: boolean; id_short: string; android_version: string | null; last_seen: number };
+      }>;
+    }>(this.url, this.token, 'curator_wards', { telegram_id: telegramId });
+  }
 }
 
 export interface AdminUserCard {
@@ -233,6 +272,9 @@ export interface AdminUserCard {
   device_id: string;
   subscription: { plan: string; active: boolean; days_left: number; expires_text: string };
   extra_device_slot: boolean;
+  is_curator: boolean;
+  wards: Array<{ username: string; active: boolean; expires_text: string }>;
+  curator_username: string | null;
   payments: Array<{ plan: string; amount: number; date_text: string }>;
 }
 
@@ -341,6 +383,28 @@ export class QmodsAdminApi {
    */
   issueDeviceSlot(username: string) {
     return callApi<{ message: string; notification_id?: string }>(this.url, this.token, 'issue_device_slot', { username }, 'POST');
+  }
+
+  /**
+   * Grants or revokes куратор status — the ONLY way an account becomes
+   * eligible to be someone's curator (see README "Кураторы"). Revoking
+   * cascades server-side: every ward currently pointing at this curator
+   * gets detached too (`cleared_wards` in the response), so a removed
+   * curator can't linger as someone's assigned curator with no way to see
+   * them in "👔 Кураторы" any more.
+   */
+  setCurator(username: string, enabled: boolean) {
+    return callApi<{ message: string; cleared_wards: number }>(this.url, this.token, 'set_curator', { username, enabled: enabled ? 1 : 0 }, 'POST');
+  }
+
+  /** All current curators + ward counts — for the "👔 Кураторы" admin section. */
+  curatorsList() {
+    return callApi<{ curators: Array<{ username: string; telegram_id: string; ward_count: number }> }>(this.url, this.token, 'curators_list');
+  }
+
+  /** Admin-side force-detach for a dispute/complaint — same effect as the ward's own unlink_curator, just by username instead of telegram_id. */
+  adminUnlinkCurator(username: string) {
+    return callApi(this.url, this.token, 'admin_unlink_curator', { username }, 'POST');
   }
 
   /** "Кто/когда/что купил" alerts queued by notify_admin_payment_event() — see index.ts deliverPendingPaymentAlerts. */

@@ -135,11 +135,15 @@ export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void>
       );
       return;
     }
-    await reply(
-      ctx,
-      `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — пользуйтесь на здоровье, а я пока присмотрю за остальным.`,
-      backButton('m:main')
-    );
+    // "Кураторство" — a curator checking an order they bought for a ward
+    // (order.username differs from their own). See index.ts finalizePayment
+    // for the same telegram_id/username-mismatch detection.
+    const me = await ctx.api.me(ctx.telegramId);
+    const boughtForSelf = (me.user?.username ?? '').toLowerCase() === order.username.toLowerCase();
+    const message = boughtForSelf
+      ? `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна — пользуйтесь на здоровье, а я пока присмотрю за остальным.`
+      : `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» для <b>${esc(order.username)}</b> активна.`;
+    await reply(ctx, message, backButton(boughtForSelf ? 'm:main' : 'm:curator'));
     return;
   }
 
@@ -155,7 +159,7 @@ export async function handlePaidReturn(ctx: Ctx, orderId: string): Promise<void>
   await checkOrderStatus(ctx, orderId);
 }
 
-function buildPayMessage(planTitle: string, amount: number, pending: boolean): string {
+export function buildPayMessage(planTitle: string, amount: number, pending: boolean): string {
   const lines = [`<b>💳 Оплата тарифа «${esc(planTitle)}»</b>`, DIVIDER, '', `Сумма: <b>${money(amount)}</b>`];
   lines.push(
     '',
@@ -166,7 +170,7 @@ function buildPayMessage(planTitle: string, amount: number, pending: boolean): s
   return lines.join('\n');
 }
 
-function buildOrderUrl(ctx: Ctx, orderId: string, amount: number, planTitle: string): string {
+export function buildOrderUrl(ctx: Ctx, orderId: string, amount: number, planTitle: string): string {
   return buildQuickpayUrl(ctx.env, {
     orderId,
     amount,

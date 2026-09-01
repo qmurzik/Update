@@ -274,6 +274,13 @@ if ($action === 'me') {
                 // него — здесь ничего не считается и не хранится отдельно.
                 'extra_device_slot' => !empty($user['extra_device_slot']),
                 'max_devices' => 1 + (!empty($user['extra_device_slot']) ? 1 : 0),
+                // Кураторство (см. "Кураторы" в README) — is_curator выдаётся
+                // ТОЛЬКО админом (set_curator в mod/admin/bot.php);
+                // curator_username выставляет сам подопечный, только своим
+                // согласием (set_curator_for_ward ниже), никогда не админ и
+                // не сам куратор напрямую.
+                'is_curator' => !empty($user['is_curator']),
+                'curator_username' => (string)($user['curator_username'] ?? '') !== '' ? (string)$user['curator_username'] : null,
                 'payments' => $payments,
                 'level' => [
                     'code' => $levelCode,
@@ -875,6 +882,141 @@ if ($action === 'referrals') {
         'ref_link' => 'https://t.me/qmods_bot?start=ref_' . urlencode((string)($user['ref_code'] ?? '')),
         'ref_count' => $refCount,
     ]);
+}
+
+// ============================================================
+// SET_CURATOR_FOR_WARD — подопечный ЛИЧНО соглашается на кураторство.
+// Вызывается ТОЛЬКО воркером, только после того, как сам подопечный нажал
+// «Подтвердить» на приглашение куратора (см. worker/src/handlers/
+// curator.ts handleCuratorLinkConfirm, worker/src/db.ts curator_invites) —
+// значит telegram_id здесь всегда принадлежит именно подопечному, куратор
+// никогда не может выставить это поле сам себе или кому-то ещё.
+// ============================================================
+
+if ($action === 'set_curator_for_ward') {
+    need_post();
+
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    $curatorUsername = trim((string)($req['curator_username'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+    if (!validate_username($curatorUsername)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник куратора.'], 400);
+    }
+
+    $users = load_users();
+    $ward = find_user_by_telegram_id($users, $telegramId);
+    if ($ward === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+
+    $curator = null;
+    foreach ($users as $u) {
+        if (strtolower((string)($u['username'] ?? '')) === strtolower($curatorUsername)) { $curator = $u; break; }
+    }
+    if ($curator === null || empty($curator['is_curator'])) {
+        bot_json(['success' => false, 'error' => 'Куратор не найден.'], 404);
+    }
+    if (strtolower((string)($curator['username'] ?? '')) === strtolower((string)($ward['username'] ?? ''))) {
+        bot_json(['success' => false, 'error' => 'Нельзя быть куратором самому себе.'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($telegramId, $curator): array {
+        foreach ($users as &$u) {
+            if ((string)($u['telegram_id'] ?? '') !== $telegramId) continue;
+            $u['curator_username'] = (string)($curator['username'] ?? '');
+            return [$users, ['success' => true]];
+        }
+        unset($u);
+        return [$users, ['error' => 'Not linked']];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') !== '') bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    log_action('Bot set_curator_for_ward: ' . $ward['username'] . ' -> ' . $curator['username']);
+    bot_json(['success' => true, 'curator_username' => (string)($curator['username'] ?? '')]);
+}
+
+// ============================================================
+// UNLINK_CURATOR — подопечный сам отвязывает своего куратора в любой
+// момент, без согласия куратора — та же логика "согласие можно отозвать",
+// что и у самого приглашения. Идемпотентно.
+// ============================================================
+
+if ($action === 'unlink_curator') {
+    need_post();
+
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($telegramId): array {
+        foreach ($users as &$u) {
+            if ((string)($u['telegram_id'] ?? '') !== $telegramId) continue;
+            $u['curator_username'] = '';
+            return [$users, ['success' => true]];
+        }
+        unset($u);
+        return [$users, ['error' => 'Not linked']];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') !== '') bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    bot_json(['success' => true]);
+}
+
+// ============================================================
+// CURATOR_WARDS — список подопечных куратора: подписка + устройство.
+// Только для is_curator=true (см. set_curator в mod/admin/bot.php).
+// Отдаёт device.id_short, НЕ полный device_id — это, по сути, bearer-
+// токен устройства (см. device_tokens в D1), куратору его знать незачем и
+// небезопасно передавать третьей стороне.
+// ============================================================
+
+if ($action === 'curator_wards') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    $users = load_users();
+    $curator = find_user_by_telegram_id($users, $telegramId);
+    if ($curator === null) {
+        bot_json(['success' => false, 'error' => 'Not linked'], 404);
+    }
+    if (empty($curator['is_curator'])) {
+        bot_json(['success' => false, 'error' => 'Доступ только для кураторов.'], 403);
+    }
+
+    $curatorUsernameLower = strtolower((string)($curator['username'] ?? ''));
+    $wards = [];
+    foreach ($users as $u) {
+        if (strtolower((string)($u['curator_username'] ?? '')) !== $curatorUsernameLower) continue;
+        $sub = subscription_info($u);
+        $deviceId = (string)($u['device_id'] ?? '');
+        $wards[] = [
+            'username' => (string)($u['username'] ?? ''),
+            'subscription' => [
+                'plan' => $sub['plan'],
+                'active' => $sub['active'],
+                'days_left' => $sub['days_left'],
+                'expires_at' => $sub['expires_at'],
+                'expires_text' => $sub['expires_text'],
+            ],
+            'device' => [
+                'linked' => $deviceId !== '',
+                'id_short' => $deviceId !== '' ? substr($deviceId, 0, 8) . '…' : '',
+                'android_version' => $u['device_android'] ?? null,
+                'last_seen' => (int)($u['last_seen'] ?? 0),
+            ],
+        ];
+    }
+
+    bot_json(['success' => true, 'wards' => $wards]);
 }
 
 // ============================================================

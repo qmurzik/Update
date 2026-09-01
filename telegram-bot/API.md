@@ -45,6 +45,7 @@ form-data или query-string (объединяются, JSON-тело имее�
     "subscription": {"plan": "premium", "active": true, "days_left": 12, "expires_at": 173..., "expires_text": "…"},
     "device": {"linked": true, "id": "…"},
     "extra_device_slot": false, "max_devices": 1,
+    "is_curator": false, "curator_username": null,
     "payments": [{"plan": "m1", "amount": 499, "date": 173..., "date_text": "…"}],
     "level": {"code": "vip", "title": "VIP", "icon": "💎", "perks": "…"},
     "achievements_unlocked": 5, "achievements_total": 13,
@@ -57,7 +58,11 @@ form-data или query-string (объединяются, JSON-тело имее�
 аккаунта (1 или 2). Сам лимит проверяет и считает воркер по количеству
 живых `device_token` в D1, не эта пара полей — `max_devices` только
 источник правды для него.
-```
+
+`is_curator`/`curator_username` *(новое, см. README «Кураторы»)* — выдан ли
+этому аккаунту статус куратора (только админом, см. `set_curator`) и ник
+ЕГО СОБСТВЕННОГО куратора, если он сам чей-то подопечный (`null`, если нет).
+
 Если не привязан: `{"success": true, "linked": false, "user": null}`.
 
 ### `link` (POST)
@@ -223,6 +228,31 @@ best-effort). См. `android-client/README.md` «Отвязка устройст
 устройство как обычное — приложение появляется в разделе «Устройства»
 бота/кабинета, и штатное `device_remove` (по `device_id`) отвязывает его.
 
+### `set_curator_for_ward` (POST) *(новое)*
+**Параметры:** `telegram_id` (подопечного), `curator_username`. Согласие
+подопечного стать чьим-то подопечным — см. README «Кураторы». `telegram_id`
+здесь ВСЕГДА подопечного (вызывается воркером только после его собственного
+нажатия «✅ Подтвердить» на приглашение), поэтому куратор физически не может
+выставить это поле сам себе или кому-то ещё. Отклоняет, если `curator_username`
+не существует, не является куратором (`is_curator`), или совпадает с самим
+подопечным.
+
+### `unlink_curator` (POST) *(новое)*
+**Параметры:** `telegram_id` (подопечного). Подопечный сам отвязывает своего
+куратора — без согласия куратора, в любой момент. Идемпотентно.
+
+### `curator_wards` *(новое)*
+**Параметры:** `telegram_id` (куратора). `403`, если `is_curator` не
+установлен. Отдаёт подписку и устройство каждого подопечного, чей
+`curator_username` указывает на этого куратора — `device.id_short`, а не
+полный `device_id` (это по сути bearer-токен устройства, куратору его знать
+незачем).
+```json
+{"success": true, "wards": [
+  {"username": "ivan", "subscription": {...}, "device": {"linked": true, "id_short": "a1b2c3d4…", "android_version": "13", "last_seen": 173...}}
+]}
+```
+
 ---
 
 ## Админский API (`mod/admin/bot.php`)
@@ -240,7 +270,9 @@ device_id, даты.
 
 ### `user`
 **Параметры:** `username`. Карточка одного пользователя (профиль, подписка,
-платежи, telegram_id, device_id).
+платежи, telegram_id, device_id). *(новое)* Плюс `is_curator`; если это
+куратор — сразу `wards: [{username, active, expires_text}]`, без отдельного
+запроса; если у него самого есть куратор — `curator_username`.
 
 ### `payments`
 Последние 100 платежей по всем пользователям.
@@ -293,6 +325,27 @@ user_id, notification_id}` — `user_id`/`notification_id` нужны тольк
 error: 'Уже куплено.'}` (`409`). Отдаёт `{success, message, user_id,
 notification_id}` — те же поля, что и `record_payment`, для того же
 `ack_telegram_push`.
+
+### `set_curator` (POST) *(новое)*
+**Параметры:** `username`, `enabled` (`1`/`0`). Выдаёт или снимает статус
+куратора — единственный способ стать куратором, см. README «Кураторы».
+Само по себе никого ни к кому не привязывает — это делает только сам
+подопечный через `set_curator_for_ward`. Снятие (`enabled=0`) каскадно
+чистит `curator_username` у всех текущих подопечных — иначе бывший куратор
+пропал бы из `curators_list`, но продолжал бы значиться у людей в профиле.
+Отдаёт `{success, message, cleared_wards}`.
+
+### `curators_list` *(новое)*
+Все текущие кураторы + число подопечных у каждого — для раздела «👔
+Кураторы» в админке.
+```json
+{"success": true, "curators": [{"username": "ivan", "telegram_id": "123", "ward_count": 3}]}
+```
+
+### `admin_unlink_curator` (POST) *(новое)*
+**Параметры:** `username` (подопечного). Принудительная отвязка от админа —
+спор/жалоба; тот же эффект, что у собственного `unlink_curator` подопечного
+в `mod/api/bot.php`, только по нику, а не по `telegram_id`.
 
 ### `remove` (POST)
 **Параметры:** `username`. Снимает подписку и отвязывает устройство.

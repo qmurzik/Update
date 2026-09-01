@@ -283,3 +283,60 @@ export async function getChatIdByUsername(env: Env, username: string): Promise<s
 export async function rejectDevicePairing(env: Env, code: string): Promise<void> {
   await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'declined_by_user' WHERE code = ? AND status = 'pending'").bind(code).run();
 }
+
+// ============================================================
+// "Кураторство" — see README "Кураторы" and handlers/curator.ts. Same
+// pending/claimed/rejected + 10-minute-TTL shape as device_pairings above:
+// a curator generates a code, shares `t.me/<bot>?start=curatorlink_<code>`
+// with a ward, and the ward's own tap on "Подтвердить" is their consent —
+// nothing links the two accounts without it. The actual curator_username
+// <-> ward relationship then lives on qmods.ru's user record (see
+// mod/api/bot.php set_curator_for_ward), not here — this table is only the
+// ephemeral handshake.
+// ============================================================
+
+const CURATOR_INVITE_TTL_MS = 10 * 60 * 1000;
+
+export async function createCuratorInvite(env: Env, curatorUsername: string, curatorTelegramId: string): Promise<string> {
+  const code = randomPairingCode();
+  await env.DB.prepare('INSERT INTO curator_invites (code, curator_username, curator_telegram_id, status, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(code, curatorUsername, curatorTelegramId, 'pending', Date.now())
+    .run();
+  return code;
+}
+
+export interface CuratorInviteRow {
+  curator_username: string;
+  curator_telegram_id: string;
+  status: 'pending' | 'claimed' | 'rejected';
+  ward_username: string | null;
+  created_at: number;
+}
+
+export async function getCuratorInvite(env: Env, code: string): Promise<CuratorInviteRow | null> {
+  const row = await env.DB.prepare('SELECT curator_username, curator_telegram_id, status, ward_username, created_at FROM curator_invites WHERE code = ?')
+    .bind(code)
+    .first<CuratorInviteRow>();
+  if (!row) return null;
+  if (row.status === 'pending' && Date.now() - row.created_at > CURATOR_INVITE_TTL_MS) return null; // expired, treat as gone
+  return row;
+}
+
+/**
+ * Marks an invite claimed once the ward has confirmed AND the
+ * curator_username write on their qmods.ru record succeeded (see
+ * handlers/curator.ts handleCuratorLinkConfirm — PHP is called first,
+ * this is called only after it reports success, so a claimed row here
+ * always has a real relationship behind it). Guarded WHERE clause is the
+ * same best-effort double-claim protection as claimDevicePairing.
+ */
+export async function claimCuratorInvite(env: Env, code: string, wardUsername: string): Promise<boolean> {
+  const res = await env.DB.prepare("UPDATE curator_invites SET status = 'claimed', ward_username = ?, claimed_at = ? WHERE code = ? AND status = 'pending'")
+    .bind(wardUsername, Date.now(), code)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}
+
+export async function rejectCuratorInvite(env: Env, code: string): Promise<void> {
+  await env.DB.prepare("UPDATE curator_invites SET status = 'rejected' WHERE code = ? AND status = 'pending'").bind(code).run();
+}

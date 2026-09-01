@@ -31,6 +31,7 @@ export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKey
       { text: '🔔 Уведомления', callback_data: 'm:notif' },
       { text: '🆘 Поддержка', callback_data: 'm:support' },
     ]);
+    kb.push([{ text: '👔 Кураторство', callback_data: 'm:curator' }]);
   }
   if (isAdmin) kb.push([{ text: '🛠 Админ-панель', callback_data: 'adm:menu' }]);
   return kb;
@@ -90,6 +91,43 @@ export const devicesKeyboard = (hasDevice: boolean, hasCloneSlot: boolean, downl
   return kb;
 };
 
+// ============================================================
+// "Кураторство" — see handlers/curator.ts.
+// ============================================================
+
+export interface CuratorWardRow {
+  username: string;
+}
+
+export const curatorMenuKeyboard = (isCurator: boolean, wards: CuratorWardRow[], hasCurator: boolean): InlineKeyboard => {
+  const kb: InlineKeyboard = [];
+  if (isCurator) {
+    for (const w of wards) kb.push([{ text: `👤 ${w.username}`, callback_data: `cur:ward:${w.username}` }]);
+    kb.push([{ text: '➕ Пригласить подопечного', callback_data: 'cur:invite' }]);
+  }
+  if (hasCurator) kb.push([{ text: '❌ Отвязать куратора', callback_data: 'cur:unlink:ask' }]);
+  kb.push([{ text: '‹ Назад', callback_data: 'm:main' }]);
+  return kb;
+};
+
+export const curatorWardDetailKeyboard = (username: string): InlineKeyboard => [
+  [{ text: '💳 Купить подписку', callback_data: `cur:buyask:${username}` }],
+  [{ text: '‹ Назад', callback_data: 'm:curator' }],
+];
+
+export const curatorPlanPickerKeyboard = (plans: PlanRow[]): InlineKeyboard => {
+  const kb: InlineKeyboard = plans.map((p) => [{ text: `${p.title} — ${p.price} ₽ / ${p.days} дн.`, callback_data: `cur:buyplan:${p.id}` }]);
+  kb.push([{ text: '‹ Назад', callback_data: 'm:curator' }]);
+  return kb;
+};
+
+export const curatorInviteAnswerKeyboard = (code: string): InlineKeyboard => [
+  [
+    { text: '✅ Подтвердить', callback_data: `curatorlink:confirm:${code}` },
+    { text: '❌ Отклонить', callback_data: `curatorlink:reject:${code}` },
+  ],
+];
+
 export const confirmKeyboard = (yesData: string, noData: string): InlineKeyboard => [
   [
     { text: '✅ Да', callback_data: yesData },
@@ -138,6 +176,7 @@ export const adminMenuKeyboard = (): InlineKeyboard => [
   [{ text: '🚧 Мин. версия приложения', callback_data: 'adm:appver' }],
   [{ text: '📦 Приложение (APK)', callback_data: 'adm:app' }],
   [{ text: '🌐 Вход/регистрация на сайте', callback_data: 'adm:siteauth' }],
+  [{ text: '👔 Кураторы', callback_data: 'adm:curators' }],
   [{ text: '‹ Назад', callback_data: 'm:main' }],
 ];
 
@@ -175,7 +214,7 @@ export const siteAuthGateKeyboard = (enabled: boolean): InlineKeyboard => [
   [{ text: '‹ В админ-меню', callback_data: 'adm:menu' }],
 ];
 
-export const adminUserCardKeyboard = (hasCloneSlot: boolean): InlineKeyboard => {
+export const adminUserCardKeyboard = (hasCloneSlot: boolean, isCurator: boolean, hasCurator: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = [
     [
       { text: '➕ Продлить', callback_data: 'adm:issue' },
@@ -183,6 +222,12 @@ export const adminUserCardKeyboard = (hasCloneSlot: boolean): InlineKeyboard => 
     ],
   ];
   if (!hasCloneSlot) kb.push([{ text: '🧬 Выдать клона', callback_data: 'adm:devslot:ask' }]);
+  kb.push([
+    isCurator
+      ? { text: '🚫 Снять кураторство', callback_data: 'adm:cur:revoke:ask' }
+      : { text: '👔 Сделать куратором', callback_data: 'adm:cur:grant:ask' },
+  ]);
+  if (hasCurator) kb.push([{ text: '❌ Отвязать его куратора', callback_data: 'adm:cur:unlinkward:ask' }]);
   kb.push(
     [
       { text: '🚫 Снять подписку', callback_data: 'adm:rm:ask' },

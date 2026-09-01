@@ -97,7 +97,9 @@ function userCardText(u: AdminUserCard): string {
     `Тариф: ${esc(u.subscription.plan)} (${u.subscription.active ? '🟢 активна' : '🔴 истекла'})`,
     `Окончание: ${esc(u.subscription.expires_text)}`,
     `Клон (2-е устройство): ${u.extra_device_slot ? '✅ выдан' : '—'}`,
+    `Куратор (статус): ${u.is_curator ? `👔 да${u.wards.length > 0 ? ` (подопечных: ${u.wards.length})` : ''}` : '—'}`,
   ];
+  if (u.curator_username) lines.push(`Его куратор: <b>${esc(u.curator_username)}</b>`);
   if (u.payments.length > 0) {
     lines.push('', '<b>Последние платежи:</b>');
     for (const p of u.payments.slice(0, 5)) {
@@ -115,7 +117,7 @@ export async function handleSearchInput(ctx: Ctx, username: string): Promise<voi
   }
 
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username: res.user.username });
-  await reply(ctx, userCardText(res.user), adminUserCardKeyboard(res.user.extra_device_slot));
+  await reply(ctx, userCardText(res.user), adminUserCardKeyboard(res.user.extra_device_slot, res.user.is_curator, !!res.user.curator_username));
 }
 
 /** Re-renders the currently open card — used as the "back"/cancel target from card sub-actions. */
@@ -196,6 +198,90 @@ export async function confirmGrantDeviceSlot(ctx: Ctx): Promise<void> {
   await logAdminAction(ctx.env, ctx.telegramId, 'issue_device_slot', { username, success: res.success });
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
   await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+}
+
+/**
+ * "👔 Сделать куратором" / "🚫 Снять кураторство" — the ONLY way an account
+ * becomes eligible to curate others (see README "Кураторы"). Granting
+ * doesn't attach anyone — that still needs the ward's own consent via the
+ * invite link (handlers/curator.ts). Revoking cascades server-side: every
+ * current ward gets detached too (mod/admin/bot.php set_curator).
+ */
+export async function askGrantCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+  await reply(
+    ctx,
+    `Назначить <b>${esc(username)}</b> куратором? Он сможет приглашать подопечных и покупать им подписку — но только тех, кто сам согласится через ссылку-приглашение.`,
+    confirmKeyboard('adm:cur:grant:yes', 'adm:card')
+  );
+}
+
+export async function confirmGrantCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+
+  const res = await ctx.adminApi.setCurator(username, true);
+  await logAdminAction(ctx.env, ctx.telegramId, 'set_curator', { username, enabled: true, success: res.success });
+  await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
+  await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+}
+
+export async function askRevokeCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+  await reply(
+    ctx,
+    `Снять статус куратора с <b>${esc(username)}</b>? Все его текущие подопечные будут автоматически отвязаны.`,
+    confirmKeyboard('adm:cur:revoke:yes', 'adm:card')
+  );
+}
+
+export async function confirmRevokeCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+
+  const res = await ctx.adminApi.setCurator(username, false);
+  await logAdminAction(ctx.env, ctx.telegramId, 'set_curator', { username, enabled: false, success: res.success, cleared_wards: res.cleared_wards });
+  await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
+  await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+}
+
+/** "❌ Отвязать куратора" на карточке ПОДОПЕЧНОГО — спорная ситуация/жалоба, тот же эффект, что и его собственная кнопка отвязки в разделе «👔 Кураторство». */
+export async function askUnlinkWardCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+  await reply(ctx, `Отвязать куратора у <b>${esc(username)}</b>?`, confirmKeyboard('adm:cur:unlinkward:yes', 'adm:card'));
+}
+
+export async function confirmUnlinkWardCurator(ctx: Ctx): Promise<void> {
+  const username = await currentCardUsername(ctx);
+  if (!username) return showAdminMenu(ctx);
+
+  const res = await ctx.adminApi.adminUnlinkCurator(username);
+  await logAdminAction(ctx.env, ctx.telegramId, 'admin_unlink_curator', { username, success: res.success });
+  await setState(ctx.env, ctx.chatId, 'admin_user_card', { username });
+  await reply(ctx, res.success ? '✅ Куратор отвязан.' : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:card'));
+}
+
+/** "👔 Кураторы" — full list from the admin main menu, see adminMenuKeyboard. Tapping a row reuses adm:u: routing (same as search results). */
+export async function showCuratorsAdmin(ctx: Ctx): Promise<void> {
+  if (!(await requireAdmin(ctx))) return;
+
+  const res = await ctx.adminApi.curatorsList();
+  const curators = res.curators ?? [];
+
+  const lines = ['<b>👔 Кураторы</b>', DIVIDER, ''];
+  if (curators.length === 0) {
+    lines.push('Кураторов пока нет — назначьте через карточку пользователя (поиск по нику → «👔 Сделать куратором»).');
+  } else {
+    for (const c of curators) lines.push(`• <b>${esc(c.username)}</b> — подопечных: ${c.ward_count}`);
+  }
+
+  const kb = curators.map((c) => [{ text: `👤 ${c.username}`, callback_data: `adm:u:${c.username}` }]);
+  kb.push([{ text: '‹ В админ-меню', callback_data: 'adm:menu' }]);
+
+  await reply(ctx, lines.join('\n'), kb);
 }
 
 export async function askDelete(ctx: Ctx): Promise<void> {

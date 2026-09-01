@@ -560,8 +560,19 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
     throw new Error(`record_payment failed for order ${order.id}: ${res.error ?? 'unknown'}`);
   }
 
+  // "Кураторство" (see README "Кураторы") — a curator can pay for a WARD's
+  // subscription (order.username differs from their own), not just their
+  // own. order.telegram_id/order.username are the same person for a normal
+  // self-purchase, so this mismatch is exactly how we tell the two apart
+  // without a schema change — see handlers/curator.ts handleBuyForWard.
+  const buyerMe = await new QmodsUserApi(env).me(order.telegram_id);
+  const boughtForSelf = (buyerMe.user?.username ?? '').toLowerCase() === order.username.toLowerCase();
+  const confirmText = boughtForSelf
+    ? `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`
+    : `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» для <b>${esc(order.username)}</b> активирована на ${order.days} дн. Спасибо, что заботитесь о своих подопечных!`;
+
   const sent = await tg
-    .sendMessage(order.telegram_id, `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`)
+    .sendMessage(order.telegram_id, confirmText)
     .then(() => true)
     .catch((err) => {
       console.error('payment confirmation delivery failed', order.telegram_id, err);

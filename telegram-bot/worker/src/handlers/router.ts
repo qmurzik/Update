@@ -19,21 +19,39 @@ import { askSupportMessage, handleSupportMessageInput, showSupport } from './sup
 import { showAchievements } from './achievements';
 import { showReferrals } from './referrals';
 import { showAppRelease } from './app';
+import {
+  askBuyForWard,
+  askInviteWard,
+  askUnlinkCurator,
+  confirmUnlinkCurator,
+  handleBuyForWard,
+  handleCuratorLinkConfirm,
+  handleCuratorLinkReject,
+  handleCuratorLinkStart,
+  showCuratorMenu,
+  showWardDetail,
+} from './curator';
 import { handleReviewText, pickStar, showReview } from './reviews';
 import {
   askAppVersion,
   askApkUpload,
   askBroadcast,
   askDelete,
+  askGrantCurator,
   askGrantDeviceSlot,
   askIssue,
   askMessage,
   askReleaseInfo,
   askRemove,
+  askRevokeCurator,
   askSearch,
+  askUnlinkWardCurator,
   confirmDelete,
+  confirmGrantCurator,
   confirmGrantDeviceSlot,
   confirmRemove,
+  confirmRevokeCurator,
+  confirmUnlinkWardCurator,
   generateApkShareLink,
   handleApkDocument,
   handleAppVersionInput,
@@ -45,6 +63,7 @@ import {
   revokeApkShareLink,
   showAdminMenu,
   showAppManager,
+  showCuratorsAdmin,
   showCurrentCard,
   showSiteAuthGate,
   showStats,
@@ -66,6 +85,10 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'sup:ask': askSupportMessage,
   'm:ach': showAchievements,
   'm:ref': showReferrals,
+  'm:curator': showCuratorMenu,
+  'cur:invite': askInviteWard,
+  'cur:unlink:ask': askUnlinkCurator,
+  'cur:unlink:yes': confirmUnlinkCurator,
   'm:app': showAppRelease,
   'm:review': showReview,
   'link:start': startLink,
@@ -88,6 +111,13 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'adm:rm:yes': confirmRemove,
   'adm:devslot:ask': askGrantDeviceSlot,
   'adm:devslot:yes': confirmGrantDeviceSlot,
+  'adm:cur:grant:ask': askGrantCurator,
+  'adm:cur:grant:yes': confirmGrantCurator,
+  'adm:cur:revoke:ask': askRevokeCurator,
+  'adm:cur:revoke:yes': confirmRevokeCurator,
+  'adm:cur:unlinkward:ask': askUnlinkWardCurator,
+  'adm:cur:unlinkward:yes': confirmUnlinkWardCurator,
+  'adm:curators': showCuratorsAdmin,
   'adm:del:ask': askDelete,
   'adm:del:yes': confirmDelete,
   'adm:broadcast': askBroadcast,
@@ -141,6 +171,29 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
   if (data.startsWith('adm:siteauth:set:')) {
     const val = data.slice('adm:siteauth:set:'.length);
     if (val === '0' || val === '1') return (ctx) => toggleSiteAuthGate(ctx, val === '1');
+  }
+  // "Кураторство" — see handlers/curator.ts. Ward usernames travel directly
+  // in callback_data (validate_username's charset has no ':'), same trust
+  // model as pay:plan:<id> above.
+  if (data.startsWith('cur:ward:')) {
+    const username = data.slice('cur:ward:'.length);
+    if (username) return (ctx) => showWardDetail(ctx, username);
+  }
+  if (data.startsWith('cur:buyask:')) {
+    const username = data.slice('cur:buyask:'.length);
+    if (username) return (ctx) => askBuyForWard(ctx, username);
+  }
+  if (data.startsWith('cur:buyplan:')) {
+    const planId = data.slice('cur:buyplan:'.length);
+    if (planId) return (ctx) => handleBuyForWard(ctx, planId);
+  }
+  if (data.startsWith('curatorlink:confirm:')) {
+    const code = data.slice('curatorlink:confirm:'.length);
+    if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) return (ctx) => handleCuratorLinkConfirm(ctx, code);
+  }
+  if (data.startsWith('curatorlink:reject:')) {
+    const code = data.slice('curatorlink:reject:'.length);
+    if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/.test(code)) return (ctx) => handleCuratorLinkReject(ctx, code);
   }
   return null;
 }
@@ -254,6 +307,12 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
         const refLink = /^ref_([0-9A-F]{6})$/.exec(payload);
         if (refLink) {
           return startWithReferral(ctx, refLink[1]);
+        }
+        // Curator invite — t.me/<bot>?start=curatorlink_<CODE>, see
+        // handlers/curator.ts createCuratorInvite/handleCuratorLinkStart.
+        const curatorLink = /^curatorlink_([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/.exec(payload);
+        if (curatorLink) {
+          return handleCuratorLinkStart(ctx, curatorLink[1]);
         }
         return handleStart(ctx);
       }

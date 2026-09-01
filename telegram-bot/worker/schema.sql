@@ -123,3 +123,25 @@ CREATE TABLE IF NOT EXISTS payment_orders (
     created_at   INTEGER NOT NULL,
     paid_at      INTEGER
 );
+
+-- "Кураторство" — see README "Кураторы". Same shape/TTL as device_pairings
+-- above (10 minutes, enforced in code): a curator (an account with
+-- is_curator=true on qmods.ru, granted only by the site admin) generates a
+-- short code + `t.me/<bot>?start=curatorlink_<code>` deep link and shares
+-- it with a ward; opening it and tapping "Подтвердить" is the ward's own
+-- consent — nothing links two accounts without the ward explicitly
+-- accepting. `ward_username` is filled in only once claimed (mirrors
+-- device_pairings' device_token). The actual curator_username <-> ward
+-- relationship is stored on qmods.ru's own user record (curator_username
+-- field, see mod/api/bot.php set_curator_for_ward) — this table is only
+-- the ephemeral invite handshake, same division of labor as device_tokens
+-- vs device_pairings above.
+CREATE TABLE IF NOT EXISTS curator_invites (
+    code                 TEXT PRIMARY KEY,
+    curator_username     TEXT NOT NULL,
+    curator_telegram_id  TEXT NOT NULL,
+    status               TEXT NOT NULL DEFAULT 'pending', -- pending | claimed | rejected
+    ward_username        TEXT,
+    created_at           INTEGER NOT NULL,
+    claimed_at           INTEGER
+);

@@ -161,7 +161,8 @@ if ($action === 'user') {
     }
 
     $needle = strtolower($username);
-    foreach (load_users() as $user) {
+    $allUsers = load_users();
+    foreach ($allUsers as $user) {
         if (($user['username_lower'] ?? '') !== $needle) continue;
 
         $sub = subscription_info($user);
@@ -174,6 +175,24 @@ if ($action === 'user') {
                 'date' => $date,
                 'date_text' => $date > 0 ? date('d.m.Y H:i', $date) : '—',
             ];
+        }
+
+        // Кураторство (см. "Кураторы" в README) — если это куратор, сразу
+        // отдаём список подопечных, чтобы карточка не требовала отдельного
+        // запроса; если это чей-то подопечный — ник его куратора.
+        $isCurator = !empty($user['is_curator']);
+        $wards = [];
+        if ($isCurator) {
+            $ownUsernameLower = strtolower((string)($user['username'] ?? ''));
+            foreach ($allUsers as $u) {
+                if (strtolower((string)($u['curator_username'] ?? '')) !== $ownUsernameLower) continue;
+                $wardSub = subscription_info($u);
+                $wards[] = [
+                    'username' => (string)($u['username'] ?? ''),
+                    'active' => (bool)$wardSub['active'],
+                    'expires_text' => $wardSub['expires_text'],
+                ];
+            }
         }
 
         bot_json([
@@ -193,6 +212,9 @@ if ($action === 'user') {
                     'expires_text' => $sub['expires_text'],
                 ],
                 'extra_device_slot' => !empty($user['extra_device_slot']),
+                'is_curator' => $isCurator,
+                'wards' => $wards,
+                'curator_username' => (string)($user['curator_username'] ?? '') !== '' ? (string)$user['curator_username'] : null,
                 'payments' => $payments,
             ],
         ]);
@@ -533,6 +555,126 @@ if ($action === 'issue_device_slot') {
     );
 
     bot_json(['success' => true, 'message' => 'Клон выдан.', 'notification_id' => $notificationId]);
+}
+
+// ============================================================
+// SET_CURATOR — выдать/снять статус куратора. Только админ решает, кто
+// может быть куратором — сама связь куратор↔подопечный при этом НЕ
+// трогается этим действием, она устанавливается только согласием
+// подопечного (см. set_curator_for_ward в mod/api/bot.php). При снятии
+// статуса каскадно чистим curator_username у всех текущих подопечных —
+// иначе бывший куратор пропал бы из списка кураторов, но продолжал бы
+// значиться в профилях людей как их куратор.
+// ============================================================
+
+if ($action === 'set_curator') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $enabled = in_array(strtolower(req_string($request, 'enabled')), ['1', 'true', 'yes', 'on'], true);
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+
+    $clearedWards = 0;
+    [$ok, $result] = update_users(function (array $users) use ($username, $enabled, &$clearedWards): array {
+        $found = false;
+        $targetUsernameLower = strtolower(trim($username));
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === $targetUsernameLower) {
+                $found = true;
+                $user['is_curator'] = $enabled;
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'not_found']];
+
+        if (!$enabled) {
+            foreach ($users as &$u) {
+                if (strtolower((string)($u['curator_username'] ?? '')) === $targetUsernameLower) {
+                    $u['curator_username'] = '';
+                    $clearedWards++;
+                }
+            }
+            unset($u);
+        }
+
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') === 'not_found') bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
+
+    log_action('Admin set_curator: ' . $username . ' -> ' . ($enabled ? 'granted' : 'revoked') . ($clearedWards > 0 ? " (cleared {$clearedWards} wards)" : ''));
+    if ($enabled) {
+        notify_user_event(strtolower($username), '👔 Вы назначены куратором', 'Теперь вы можете приглашать подопечных, просматривать их подписку и устройство, а также покупать им продление — раздел «👔 Кураторство» в меню.');
+    }
+
+    bot_json(['success' => true, 'message' => $enabled ? 'Статус куратора выдан.' : 'Статус куратора снят.', 'cleared_wards' => $clearedWards]);
+}
+
+// ============================================================
+// CURATORS_LIST — все текущие кураторы + число подопечных у каждого, для
+// раздела «👔 Кураторы» в админке.
+// ============================================================
+
+if ($action === 'curators_list') {
+    $users = load_users();
+    $wardCounts = [];
+    foreach ($users as $u) {
+        $cu = strtolower((string)($u['curator_username'] ?? ''));
+        if ($cu === '') continue;
+        $wardCounts[$cu] = ($wardCounts[$cu] ?? 0) + 1;
+    }
+
+    $curators = [];
+    foreach ($users as $u) {
+        if (empty($u['is_curator'])) continue;
+        $usernameLower = strtolower((string)($u['username'] ?? ''));
+        $curators[] = [
+            'username' => (string)($u['username'] ?? ''),
+            'telegram_id' => (string)($u['telegram_id'] ?? ''),
+            'ward_count' => $wardCounts[$usernameLower] ?? 0,
+        ];
+    }
+
+    bot_json(['success' => true, 'curators' => $curators]);
+}
+
+// ============================================================
+// ADMIN_UNLINK_CURATOR — принудительно отвязать конкретного подопечного от
+// его куратора (спор/жалоба) — то же самое действие, что подопечный может
+// сделать сам через unlink_curator в mod/api/bot.php, только от имени
+// админа и по нику, а не по telegram_id.
+// ============================================================
+
+if ($action === 'admin_unlink_curator') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($username): array {
+        $targetUsernameLower = strtolower(trim($username));
+        foreach ($users as &$u) {
+            if (($u['username_lower'] ?? '') !== $targetUsernameLower) continue;
+            $u['curator_username'] = '';
+            return [$users, ['success' => true]];
+        }
+        unset($u);
+        return [$users, ['error' => 'not_found']];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') === 'not_found') bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
+
+    log_action('Admin admin_unlink_curator: ' . $username);
+    bot_json(['success' => true]);
 }
 
 // ============================================================

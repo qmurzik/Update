@@ -1,7 +1,7 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
-import { checkRateLimit, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
+import { checkRateLimit, createCuratorInvite, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
 import { DEVICE_SLOT_PLAN_ID, DEVICE_SLOT_PRICE, DEVICE_SLOT_TITLE, ensureDeviceSlotGranted } from '../handlers/payment';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
@@ -169,6 +169,70 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
       return json({ success: true, order_id: orderId, url });
     }
 
+    // ============================================================
+    // "Кураторство" — see README "Кураторы", handlers/curator.ts (the
+    // chat-bot equivalent of every action below).
+    // ============================================================
+
+    case 'curator_wards': {
+      const me = await api.me(telegramId);
+      if (!me.linked || !me.user) return json({ success: false, error: 'Not linked' }, 403);
+      if (!me.user.is_curator) return json({ success: false, error: 'Доступ только для кураторов' }, 403);
+      return json(await api.curatorWards(telegramId));
+    }
+
+    // The link itself is claimed only via the bot chat (`/start
+    // curatorlink_<code>`) — a Telegram deep link always opens the bot,
+    // never the Mini App directly, same as the ref_link shown in "🎁
+    // Рефералы". This just generates and hands back the link to share.
+    case 'curator_invite_start': {
+      const me = await api.me(telegramId);
+      if (!me.linked || !me.user) return json({ success: false, error: 'Not linked' }, 403);
+      if (!me.user.is_curator) return json({ success: false, error: 'Доступ только для кураторов' }, 403);
+      const code = await createCuratorInvite(env, me.user.username, telegramId);
+      return json({ success: true, link: `https://t.me/${env.BOT_USERNAME}?start=curatorlink_${code}` });
+    }
+
+    case 'curator_unlink':
+      return json(await api.unlinkCurator(telegramId));
+
+    // Curator buying a ward's subscription — mirrors pay_start's plan
+    // branch above, except the days land on `ward.username`, not the
+    // caller. Re-validates membership server-side (never trusts the
+    // wardUsername the client sends) via the SAME curatorWards() call the
+    // ward list itself came from.
+    case 'curator_buy_start': {
+      const me = await api.me(telegramId);
+      if (!me.linked || !me.user) return json({ success: false, error: 'Not linked' }, 403);
+      if (!me.user.is_curator) return json({ success: false, error: 'Доступ только для кураторов' }, 403);
+
+      const wardUsername = String(body.username ?? '');
+      const wardsRes = await api.curatorWards(telegramId);
+      const ward = (wardsRes.wards ?? []).find((w) => w.username.toLowerCase() === wardUsername.toLowerCase());
+      if (!ward) return json({ success: false, error: 'Подопечный не найден' }, 404);
+
+      const planId = String(body.plan_id ?? '');
+      const plansRes = await api.plans();
+      const plan = (plansRes.plans ?? []).find((p) => p.id === planId);
+      if (!plan) return json({ success: false, error: 'Тариф не найден' }, 404);
+
+      const orderId = await createPaymentOrder(env, {
+        telegramId, // curator's own — see index.ts finalizePayment's telegram_id/username-mismatch detection
+        username: ward.username,
+        planId: plan.id,
+        planTitle: plan.title,
+        days: plan.days,
+        amount: plan.price,
+      });
+      const url = buildQuickpayUrl(env, {
+        orderId,
+        amount: plan.price,
+        description: `QMods — ${plan.title} для ${ward.username}`,
+        successUrl: `https://t.me/${env.BOT_USERNAME}?start=paid_${orderId}`,
+      });
+      return json({ success: true, order_id: orderId, url });
+    }
+
     // Polled by the webapp after the user returns from the ЮMoney page —
     // the webhook is what actually grants anything, this just reports it.
     case 'pay_status': {
@@ -188,6 +252,9 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
     case 'admin_user':
     case 'admin_issue':
     case 'admin_issue_device_slot':
+    case 'admin_set_curator':
+    case 'admin_curators_list':
+    case 'admin_unlink_curator':
     case 'admin_remove':
     case 'admin_delete_user':
     case 'admin_send_notification':
@@ -226,6 +293,15 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
 
     case 'admin_issue_device_slot':
       return json(await adminApi.issueDeviceSlot(String(body.username ?? '')));
+
+    case 'admin_set_curator':
+      return json(await adminApi.setCurator(String(body.username ?? ''), !!body.enabled));
+
+    case 'admin_curators_list':
+      return json(await adminApi.curatorsList());
+
+    case 'admin_unlink_curator':
+      return json(await adminApi.adminUnlinkCurator(String(body.username ?? '')));
 
     case 'admin_remove':
       return json(await adminApi.remove(String(body.username ?? '')));
