@@ -724,10 +724,23 @@ if ($action === 'delete_user') {
 
     [$ok, $result] = update_users(function (array $users) use ($username): array {
         $before = count($users);
+        $usernameLower = strtolower(trim($username));
         $users = array_values(array_filter($users, static fn($user) =>
-            ($user['username_lower'] ?? '') !== strtolower(trim($username))
+            ($user['username_lower'] ?? '') !== $usernameLower
         ));
         if (count($users) === $before) return [$users, ['error' => 'Пользователь не найден.']];
+
+        // Тот же каскад, что и в set_curator при снятии статуса — если
+        // удалённый аккаунт был чьим-то куратором, его подопечные не
+        // должны остаться числиться под ником, которого больше не
+        // существует (см. README «Кураторы»).
+        foreach ($users as &$u) {
+            if (strtolower((string)($u['curator_username'] ?? '')) === $usernameLower) {
+                $u['curator_username'] = '';
+            }
+        }
+        unset($u);
+
         return [$users, ['success' => true]];
     });
 
