@@ -375,6 +375,19 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const validSignature = await verifyNotificationSignature(env, notification);
     if (!validSignature) {
       console.error('yoomoney webhook: bad signature', notification.operation_id || '(no operation_id)');
+      // This used to fail completely silently — a wrong/missing
+      // YOOMONEY_NOTIFICATION_SECRET (or a wallet-side URL typo landing
+      // notifications somewhere unsigned) left every order stuck 'pending'
+      // forever with zero trace anywhere, since nothing past this point
+      // ever ran. Same dedupe/cooldown as every other reportError call —
+      // one alert per 10 minutes, not one per retried notification.
+      ctx.waitUntil(
+        reportError(
+          env,
+          new Error(`Bad ЮMoney signature (label=${notification.label || '?'}, amount=${notification.amount || '?'})`),
+          'yoomoney webhook: signature check'
+        )
+      );
       return new Response('Forbidden', { status: 403 });
     }
 
