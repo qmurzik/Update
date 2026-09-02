@@ -29,6 +29,7 @@ export interface YooMoneyNotification {
   notification_type: string;
   operation_id: string;
   amount: string;
+  withdraw_amount: string;
   currency: string;
   datetime: string;
   sender: string;
@@ -69,6 +70,7 @@ export function parseNotification(formData: URLSearchParams): YooMoneyNotificati
     notification_type: formData.get('notification_type') ?? '',
     operation_id: formData.get('operation_id') ?? '',
     amount: formData.get('amount') ?? '',
+    withdraw_amount: formData.get('withdraw_amount') ?? '',
     currency: formData.get('currency') ?? '',
     datetime: formData.get('datetime') ?? '',
     sender: formData.get('sender') ?? '',

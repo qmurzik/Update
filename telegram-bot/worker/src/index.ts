@@ -405,9 +405,17 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
       return new Response('OK', { status: 200 });
     }
 
-    const receivedAmount = Number.parseFloat(notification.amount);
-    if (!Number.isFinite(receivedAmount) || receivedAmount < order.amount - 0.01) {
-      console.error('yoomoney webhook: amount mismatch', order.id, notification.amount, 'expected', order.amount);
+    // `amount` is what lands in the WALLET after ЮMoney's own commission —
+    // for a card payment that's routinely a few % under what the payer was
+    // actually asked to pay (see buildQuickpayUrl's `sum`). `withdraw_amount`
+    // is what was actually charged to the payer, present whenever a
+    // commission was deducted; falls back to `amount` for fee-free
+    // transfers (e.g. wallet-to-wallet) where ЮMoney omits it entirely.
+    // Comparing the NET amount against the gross requested `sum` used to
+    // reject every legitimate card payment as an "amount mismatch".
+    const paidAmount = Number.parseFloat(notification.withdraw_amount || notification.amount);
+    if (!Number.isFinite(paidAmount) || paidAmount < order.amount - 0.01) {
+      console.error('yoomoney webhook: amount mismatch', order.id, notification.withdraw_amount, notification.amount, 'expected', order.amount);
       ctx.waitUntil(reportError(env, new Error(`ЮMoney amount mismatch on order ${order.id}`), 'yoomoney webhook'));
       return new Response('OK', { status: 200 });
     }
