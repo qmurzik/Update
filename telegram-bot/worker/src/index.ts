@@ -381,10 +381,33 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
       // forever with zero trace anywhere, since nothing past this point
       // ever ran. Same dedupe/cooldown as every other reportError call —
       // one alert per 10 minutes, not one per retried notification.
+      //
+      // Every field logged here is exactly what ЮMoney itself sends in the
+      // notification body — none of it is secret, all of it is exactly
+      // what verifyNotificationSignature() hashes together (see
+      // yoomoney.ts). secretLen is the CONFIGURED secret's character
+      // count, never the value itself — enough to catch "empty/unset" (0)
+      // or "pasted with a trailing space/newline" (off from the real
+      // length) without ever exposing the secret.
+      const secretLen = (env.YOOMONEY_NOTIFICATION_SECRET ?? '').length;
       ctx.waitUntil(
         reportError(
           env,
-          new Error(`Bad ЮMoney signature (label=${notification.label || '?'}, amount=${notification.amount || '?'})`),
+          new Error(
+            [
+              'Bad ЮMoney signature',
+              `label=${notification.label || '?'}`,
+              `amount=${notification.amount || '?'}`,
+              `type=${notification.notification_type || '?'}`,
+              `operation_id=${notification.operation_id || '?'}`,
+              `currency=${notification.currency || '?'}`,
+              `datetime=${notification.datetime || '?'}`,
+              `sender=${notification.sender || '?'}`,
+              `codepro=${notification.codepro || '?'}`,
+              `received_hash=${notification.sha1_hash || '?'}`,
+              `secret_len=${secretLen}`,
+            ].join(' | ')
+          ),
           'yoomoney webhook: signature check'
         )
       );
