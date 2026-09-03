@@ -22,6 +22,7 @@ import type { PaymentOrderRow } from './db';
 import type { InlineKeyboard, TgUpdate } from './telegram/types';
 import { APP_HTML } from './webapp/page';
 import { handleWebAppApi, handleWebAppApkUpload } from './webapp/api';
+import { handlePluginLookup } from './handlers/pluginLookup';
 import { renderDownloadPage } from './webapp/downloadPage';
 import { parseNotification, verifyNotificationSignature } from './yoomoney';
 
@@ -125,6 +126,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
   }
   if (url.pathname === '/app/api/apk') {
     return handleWebAppApkUpload(request, env);
+  }
+
+  // exteraGram plugin's own direct lookup — see handlers/pluginLookup.ts and
+  // README "Быстрый переход из Telegram-клиента". Separate, lower-privilege
+  // auth from everything above (PLUGIN_LOOKUP_TOKEN, not the admin token).
+  if (url.pathname === '/plugin/lookup' && request.method === 'GET') {
+    return handlePluginLookup(request, env);
   }
 
   // The "pretty" public APK download page — a stable URL admins generate

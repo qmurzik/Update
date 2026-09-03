@@ -247,15 +247,17 @@ export interface AdminUserRow {
   active: boolean;
   days_left: number;
   telegram_id: string;
+  telegram_username?: string | null;
 }
 
 /** Browsable, click-through list of users — the alternative to typing a username every time. */
 export const adminUsersListKeyboard = (rows: AdminUserRow[], page: number, hasPrev: boolean, hasNext: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = rows.map((u) => [
     {
-      // telegram_id тоже виден прямо в списке — не только на карточке —
-      // чтобы не открывать каждого по очереди, если ищут конкретный id.
-      text: `${u.active ? '🟢' : '🔴'} ${u.username}${u.active ? ` · ${u.days_left}д` : ''}${u.telegram_id ? ` · id${u.telegram_id}` : ''}`,
+      // telegram_id и Telegram @ник тоже видны прямо в списке — не только
+      // на карточке — чтобы не открывать каждого по очереди, если ищут
+      // конкретного человека по тому, что видно в его профиле Telegram.
+      text: `${u.active ? '🟢' : '🔴'} ${u.username}${u.active ? ` · ${u.days_left}д` : ''}${u.telegram_username ? ` · @${u.telegram_username}` : ''}${u.telegram_id ? ` · id${u.telegram_id}` : ''}`,
       callback_data: `adm:u:${u.username}`,
     },
   ]);

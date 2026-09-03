@@ -954,7 +954,7 @@ function renderAdmin(autoOpenTelegramId) {
       '</div>' + buildChart(stats.series || []) + '</div>';
 
     html += '<div class="card"><h3>' + hIcon('users') + 'Пользователи (' + adminUsers.length + ')</h3>' +
-      '<input type="search" id="userSearch" placeholder="Поиск по нику или Telegram ID…" oninput="filterUsers()">' +
+      '<input type="search" id="userSearch" placeholder="Поиск по нику, @telegram или ID…" oninput="filterUsers()">' +
       '<div class="user-list" id="userList"></div></div>';
 
     html += '<div id="userDetail"></div>';
@@ -1161,7 +1161,9 @@ function renderUserList(list) {
   if (!list.length) { el.innerHTML = '<p class="muted">Никого не найдено.</p>'; return; }
   el.innerHTML = list.slice(0, 100).map(function (u) {
     return '<button class="user-row" onclick="selectAdminUser(' + jsStr(u.username) + ')">' +
-      '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) + (u.telegram_id ? ' <code class="muted">id' + esc(u.telegram_id) + '</code>' : '') + '</span>' +
+      '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) +
+      (u.telegram_username ? ' <span class="muted">@' + esc(u.telegram_username) + '</span>' : '') +
+      (u.telegram_id ? ' <code class="muted">id' + esc(u.telegram_id) + '</code>' : '') + '</span>' +
       '<span class="muted">' + (u.active ? u.days_left + 'д' : '') + '</span></button>';
   }).join('');
 }
@@ -1169,7 +1171,9 @@ function renderUserList(list) {
 function filterUsers() {
   var q = document.getElementById('userSearch').value.trim().toLowerCase();
   var filtered = q ? adminUsers.filter(function (u) {
-    return u.username.toLowerCase().indexOf(q) !== -1 || (u.telegram_id || '').indexOf(q) !== -1;
+    return u.username.toLowerCase().indexOf(q) !== -1 ||
+      (u.telegram_username || '').toLowerCase().indexOf(q) !== -1 ||
+      (u.telegram_id || '').indexOf(q) !== -1;
   }) : adminUsers;
   renderUserList(filtered);
 }
@@ -1188,7 +1192,7 @@ function renderUserDetail(u) {
   var el = document.getElementById('userDetail');
   var html = '<div class="card"><h3>' + hIcon('profile') + esc(u.username) + '</h3>' +
     row('ID', '<code>' + esc(u.id) + '</code>') +
-    row('Telegram', u.telegram_id ? '<code>' + esc(u.telegram_id) + '</code>' : 'не привязан') +
+    row('Telegram', u.telegram_id ? '<code>' + esc(u.telegram_id) + '</code>' + (u.telegram_username ? ' @' + esc(u.telegram_username) : '') : 'не привязан') +
     row('Устройство', u.device_id ? '✅' : '—') +
     row('Тариф', esc(u.subscription.plan) + ' (' + (u.subscription.active ? '🟢' : '🔴') + ')') +
     row('Окончание', esc(u.subscription.expires_text)) +

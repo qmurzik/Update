@@ -1,7 +1,16 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
 import { QmodsAdminApi, QmodsUserApi, uploadApkBinary } from '../qmodsApi';
-import { checkRateLimit, createCuratorInvite, createPaymentOrder, getPaymentOrder, revokeDeviceToken, revokeDeviceTokensForUsername } from '../db';
+import {
+  checkRateLimit,
+  createCuratorInvite,
+  createPaymentOrder,
+  getPaymentOrder,
+  getTelegramUsername,
+  getTelegramUsernamesByChatIds,
+  revokeDeviceToken,
+  revokeDeviceTokensForUsername,
+} from '../db';
 import { DEVICE_SLOT_PLAN_ID, DEVICE_SLOT_PRICE, DEVICE_SLOT_TITLE, ensureDeviceSlotGranted } from '../handlers/payment';
 import { reportError } from '../errorReport';
 import { buildQuickpayUrl } from '../yoomoney';
@@ -283,14 +292,24 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
     case 'admin_stats':
       return json(await adminApi.stats());
 
-    case 'admin_users':
-      return json(await adminApi.users());
+    case 'admin_users': {
+      const res = await adminApi.users();
+      const map = await getTelegramUsernamesByChatIds(env, res.users.map((u) => u.telegram_id));
+      for (const u of res.users) u.telegram_username = map[u.telegram_id] ?? null;
+      return json(res);
+    }
 
-    case 'admin_user':
-      return json(await adminApi.user(String(body.username ?? '')));
+    case 'admin_user': {
+      const res = await adminApi.user(String(body.username ?? ''));
+      if (res.user?.telegram_id) res.user.telegram_username = await getTelegramUsername(env, res.user.telegram_id);
+      return json(res);
+    }
 
-    case 'admin_user_by_telegram_id':
-      return json(await adminApi.userByTelegramId(String(body.telegram_id ?? '')));
+    case 'admin_user_by_telegram_id': {
+      const res = await adminApi.userByTelegramId(String(body.telegram_id ?? ''));
+      if (res.user?.telegram_id) res.user.telegram_username = await getTelegramUsername(env, res.user.telegram_id);
+      return json(res);
+    }
 
     case 'admin_issue':
       return json(await adminApi.issue(String(body.username ?? ''), Number(body.days ?? 0)));

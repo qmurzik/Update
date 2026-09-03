@@ -269,6 +269,8 @@ export interface AdminUserCard {
   id: string;
   username: string;
   telegram_id: string;
+  /** Telegram @handle (not the QMods site login above) — filled in by the Worker from its own D1 telegram_users table, not part of the PHP response. */
+  telegram_username?: string | null;
   device_id: string;
   subscription: { plan: string; active: boolean; days_left: number; expires_text: string };
   extra_device_slot: boolean;
@@ -286,6 +288,8 @@ export interface AdminUserSummary {
   days_left: number;
   expires_text: string;
   telegram_id: string;
+  /** Telegram @handle — filled in by the Worker from D1, see AdminUserCard.telegram_username. */
+  telegram_username?: string | null;
   device_id: string;
   created_text: string;
 }

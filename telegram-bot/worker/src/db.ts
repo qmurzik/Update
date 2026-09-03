@@ -279,6 +279,35 @@ export async function getChatIdByUsername(env: Env, username: string): Promise<s
   return row ? row.chat_id : null;
 }
 
+/**
+ * Reverse of getChatIdByUsername: given a chat_id (= telegram_id), returns
+ * that person's Telegram @username — null if they've never messaged the
+ * bot, or messaged it but have no @username set. This is the person's
+ * Telegram handle, distinct from their QMods site login (`username` on
+ * mod/admin/bot.php's user cards) — the admin panel only ever stored the
+ * numeric telegram_id, never the @handle, so this is what fills that gap.
+ */
+export async function getTelegramUsername(env: Env, chatId: string): Promise<string | null> {
+  if (!chatId) return null;
+  const row = await env.DB.prepare('SELECT username FROM telegram_users WHERE chat_id = ?').bind(chatId).first<{ username: string | null }>();
+  return row?.username ?? null;
+}
+
+/** Batch version of getTelegramUsername() — one query for a whole admin user list instead of one per row. Returns a chat_id -> username map (only for chat_ids that have a known @username). */
+export async function getTelegramUsernamesByChatIds(env: Env, chatIds: string[]): Promise<Record<string, string>> {
+  const ids = [...new Set(chatIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const placeholders = ids.map(() => '?').join(',');
+  const { results } = await env.DB.prepare(`SELECT chat_id, username FROM telegram_users WHERE chat_id IN (${placeholders}) AND username IS NOT NULL`)
+    .bind(...ids)
+    .all<{ chat_id: string; username: string }>();
+  const map: Record<string, string> = {};
+  for (const row of results ?? []) {
+    map[row.chat_id] = row.username;
+  }
+  return map;
+}
+
 /** Declines a device-pairing-by-username request — the app's poll sees status 'rejected' with this reason (same field DevicePairingRunnable already reads for ONE_DEVICE_PER_ACCOUNT). */
 export async function rejectDevicePairing(env: Env, code: string): Promise<void> {
   await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'declined_by_user' WHERE code = ? AND status = 'pending'").bind(code).run();

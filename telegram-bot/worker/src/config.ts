@@ -8,6 +8,17 @@ export interface Env {
   QMODS_ADMIN_BOT_API_TOKEN: string;
   /** Shared secret from the wallet's "HTTP-уведомления" settings on yoomoney.ru — verifies webhook authenticity (see yoomoney.ts). */
   YOOMONEY_NOTIFICATION_SECRET: string;
+  /**
+   * Separate, narrowly-scoped token for the exteraGram plugin's direct
+   * lookup (see handlers/pluginLookup.ts) — deliberately NOT
+   * QMODS_ADMIN_BOT_API_TOKEN. That token can issue/revoke subscriptions,
+   * delete accounts, broadcast to everyone; this one only ever returns a
+   * read-only subscription-status snippet for one telegram_id. Keeping them
+   * separate means a plugin file sitting on a phone (which could be lost,
+   * rooted, or have its storage read by malware) leaks at most "is this
+   * person subscribed", never admin control over the whole bot.
+   */
+  PLUGIN_LOOKUP_TOKEN: string;
 
   // Vars (wrangler.toml)
   QMODS_API_BASE: string;

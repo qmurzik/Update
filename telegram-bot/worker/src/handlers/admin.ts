@@ -10,7 +10,7 @@ import {
 } from '../telegram/keyboards';
 import { DIVIDER, esc, splitTitleBody } from '../util';
 import { isAdmin } from '../config';
-import { clearState, getState, logAdminAction, revokeDeviceTokensForUsername, setState } from '../db';
+import { clearState, getState, getTelegramUsername, getTelegramUsernamesByChatIds, logAdminAction, revokeDeviceTokensForUsername, setState } from '../db';
 import type { AdminUserCard, AdminUserSummary } from '../qmodsApi';
 import { uploadApkBinary } from '../qmodsApi';
 import type { TgDocument } from '../telegram/types';
@@ -64,6 +64,8 @@ export async function showUsersList(ctx: Ctx, page: number): Promise<void> {
 
   const res = await ctx.adminApi.users();
   const all: AdminUserSummary[] = res.users ?? [];
+  const tgUsernames = await getTelegramUsernamesByChatIds(ctx.env, all.map((u) => u.telegram_id));
+  for (const u of all) u.telegram_username = tgUsernames[u.telegram_id] ?? null;
 
   const totalPages = Math.max(1, Math.ceil(all.length / USERS_PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
@@ -92,7 +94,7 @@ function userCardText(u: AdminUserCard): string {
     `<b>👤 ${esc(u.username)}</b>`,
     DIVIDER,
     `ID: <code>${esc(u.id)}</code>`,
-    `Telegram: ${u.telegram_id ? `<code>${esc(u.telegram_id)}</code>` : 'не привязан'}`,
+    `Telegram: ${u.telegram_id ? `<code>${esc(u.telegram_id)}</code>${u.telegram_username ? ` (@${esc(u.telegram_username)})` : ''}` : 'не привязан'}`,
     `Устройство: ${u.device_id ? '✅ привязано' : '—'}`,
     `Тариф: ${esc(u.subscription.plan)} (${u.subscription.active ? '🟢 активна' : '🔴 истекла'})`,
     `Окончание: ${esc(u.subscription.expires_text)}`,
@@ -115,6 +117,7 @@ export async function handleSearchInput(ctx: Ctx, username: string): Promise<voi
     await reply(ctx, `Пользователь <code>${esc(username)}</code> не найден.`, cancelKeyboard('adm:menu'));
     return;
   }
+  if (res.user.telegram_id) res.user.telegram_username = await getTelegramUsername(ctx.env, res.user.telegram_id);
 
   await setState(ctx.env, ctx.chatId, 'admin_user_card', { username: res.user.username });
   await reply(ctx, userCardText(res.user), adminUserCardKeyboard(res.user.extra_device_slot, res.user.is_curator, !!res.user.curator_username));

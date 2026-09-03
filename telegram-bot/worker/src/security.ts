@@ -17,3 +17,9 @@ export function verifyWebhookSecret(request: Request, env: Env): boolean {
   const header = request.headers.get('X-Telegram-Bot-Api-Secret-Token') ?? '';
   return header !== '' && timingSafeEqual(header, env.TELEGRAM_WEBHOOK_SECRET);
 }
+
+/** Auth for GET /plugin/lookup — see config.ts PLUGIN_LOOKUP_TOKEN for why this is a separate, lower-privilege token from the admin one. */
+export function verifyPluginLookupToken(request: Request, env: Env): boolean {
+  const header = request.headers.get('X-Plugin-Token') ?? '';
+  return header !== '' && env.PLUGIN_LOOKUP_TOKEN !== '' && timingSafeEqual(header, env.PLUGIN_LOOKUP_TOKEN);
+}
