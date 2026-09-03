@@ -269,10 +269,13 @@ best-effort). См. `android-client/README.md` «Отвязка устройст
 device_id, даты.
 
 ### `user`
-**Параметры:** `username`. Карточка одного пользователя (профиль, подписка,
-платежи, telegram_id, device_id). *(новое)* Плюс `is_curator`; если это
-куратор — сразу `wards: [{username, active, expires_text}]`, без отдельного
-запроса; если у него самого есть куратор — `curator_username`.
+**Параметры:** `username` **или** `telegram_id` *(новое)* — если `username`
+пуст, а `telegram_id` указан, ищет по нему вместо ника (см. README
+«Быстрый переход из Telegram-клиента»). Карточка одного пользователя
+(профиль, подписка, платежи, telegram_id, device_id). *(новое)* Плюс
+`is_curator`; если это куратор — сразу `wards: [{username, active,
+expires_text}]`, без отдельного запроса; если у него самого есть куратор —
+`curator_username`.
 
 ### `payments`
 Последние 100 платежей по всем пользователям.

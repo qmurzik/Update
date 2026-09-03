@@ -156,14 +156,27 @@ if ($action === 'users') {
 
 if ($action === 'user') {
     $username = req_string($request, 'username');
-    if (!validate_username($username)) {
+    $telegramId = req_string($request, 'telegram_id');
+
+    // Поиск по telegram_id — для внешних переходов "открыть профиль этого
+    // отправителя в админке" (см. README "Быстрый переход из Telegram-
+    // клиента"), где под рукой есть только numeric id из профиля
+    // собеседника, а не его qmods-ник.
+    if ($username === '' && $telegramId !== '') {
+        if (!preg_match('/^\d{1,20}$/', $telegramId)) {
+            bot_json(['success' => false, 'error' => 'Некорректный telegram_id.'], 400);
+        }
+    } elseif (!validate_username($username)) {
         bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
     }
 
     $needle = strtolower($username);
     $allUsers = load_users();
     foreach ($allUsers as $user) {
-        if (($user['username_lower'] ?? '') !== $needle) continue;
+        $matches = $telegramId !== '' && $username === ''
+            ? (string)($user['telegram_id'] ?? '') === $telegramId
+            : ($user['username_lower'] ?? '') === $needle;
+        if (!$matches) continue;
 
         $sub = subscription_info($user);
         $payments = [];

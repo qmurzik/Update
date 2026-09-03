@@ -250,6 +250,7 @@ async function dispatchAction(action: string, body: Record<string, unknown>, tel
     case 'admin_stats':
     case 'admin_users':
     case 'admin_user':
+    case 'admin_user_by_telegram_id':
     case 'admin_issue':
     case 'admin_issue_device_slot':
     case 'admin_set_curator':
@@ -287,6 +288,9 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
 
     case 'admin_user':
       return json(await adminApi.user(String(body.username ?? '')));
+
+    case 'admin_user_by_telegram_id':
+      return json(await adminApi.userByTelegramId(String(body.telegram_id ?? '')));
 
     case 'admin_issue':
       return json(await adminApi.issue(String(body.username ?? ''), Number(body.days ?? 0)));

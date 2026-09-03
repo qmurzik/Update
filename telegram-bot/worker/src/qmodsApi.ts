@@ -312,6 +312,17 @@ export class QmodsAdminApi {
     return callApi<{ found: boolean; user: AdminUserCard | null }>(this.url, this.token, 'user', { username });
   }
 
+  /**
+   * Same card as user(), looked up by telegram_id instead of username —
+   * for jumping straight to a profile from outside the admin panel (a
+   * Telegram client, e.g. an exteraGram plugin) where only the sender's
+   * numeric id is at hand. See README "Быстрый переход из Telegram-клиента"
+   * and webapp/page.ts's start_param handling.
+   */
+  userByTelegramId(telegramId: string) {
+    return callApi<{ found: boolean; user: AdminUserCard | null }>(this.url, this.token, 'user', { telegram_id: telegramId });
+  }
+
   issue(username: string, days: number) {
     return callApi<{ message: string }>(this.url, this.token, 'issue', { username, days }, 'POST');
   }

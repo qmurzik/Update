@@ -312,6 +312,11 @@ if (tg && tg.onEvent) tg.onEvent('themeChanged', function () {
 var initData = tg ? tg.initData : '';
 var me = null;
 var isAdminUser = false;
+// "Быстрый переход из Telegram-клиента" (см. README) — a Direct Link Mini
+// App opened as t.me/<bot>/<app>?startapp=admin_uid_<telegram_id> carries
+// that param here, signed as part of initData (not spoofable via the URL
+// bar) — consumed once in boot() below, then cleared.
+var pendingAdminAutoOpenId = null;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -397,6 +402,12 @@ function boot() {
     renderHero();
     renderProfile();
     positionIndicator(document.querySelector('.tab.active'));
+
+    var startParam = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
+    if (isAdminUser && startParam.indexOf('admin_uid_') === 0) {
+      pendingAdminAutoOpenId = startParam.slice('admin_uid_'.length);
+      switchTab('admin');
+    }
   });
 }
 
@@ -457,7 +468,12 @@ function switchTab(name) {
     if (isActive) activeBtn = btn;
   });
   positionIndicator(activeBtn);
-  if (!loaded[name]) {
+  // "Быстрый переход" — a pending admin_uid_ start_param forces a re-render
+  // even if the admin tab was already loaded earlier this session, since
+  // the whole point is landing straight on that profile right now.
+  var autoOpenId = name === 'admin' ? pendingAdminAutoOpenId : null;
+  pendingAdminAutoOpenId = null;
+  if (!loaded[name] || autoOpenId) {
     loaded[name] = true;
     if (name === 'profile') renderProfile();
     if (name === 'sub') renderSub();
@@ -466,7 +482,7 @@ function switchTab(name) {
     if (name === 'pay') renderPay();
     if (name === 'notif') renderNotif();
     if (name === 'curator') renderCurator();
-    if (name === 'admin') renderAdmin();
+    if (name === 'admin') renderAdmin(autoOpenId);
   }
   updateMainButton(name);
 }
@@ -916,7 +932,7 @@ function curatorUnlinkSelf() {
 
 var adminUsers = [];
 
-function renderAdmin() {
+function renderAdmin(autoOpenTelegramId) {
   var el = document.getElementById('tab-admin');
   el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
   Promise.all([
@@ -938,7 +954,7 @@ function renderAdmin() {
       '</div>' + buildChart(stats.series || []) + '</div>';
 
     html += '<div class="card"><h3>' + hIcon('users') + 'Пользователи (' + adminUsers.length + ')</h3>' +
-      '<input type="search" id="userSearch" placeholder="Поиск по нику…" oninput="filterUsers()">' +
+      '<input type="search" id="userSearch" placeholder="Поиск по нику или Telegram ID…" oninput="filterUsers()">' +
       '<div class="user-list" id="userList"></div></div>';
 
     html += '<div id="userDetail"></div>';
@@ -955,6 +971,21 @@ function renderAdmin() {
 
     el.innerHTML = html;
     renderUserList(adminUsers);
+    if (autoOpenTelegramId) openAdminUserByTelegramId(autoOpenTelegramId);
+  });
+}
+
+/** "Быстрый переход из Telegram-клиента" (см. README) — looks a profile up by telegram_id instead of username, since that's all a Telegram client (e.g. an exteraGram plugin) has on hand for the person whose profile is open. */
+function openAdminUserByTelegramId(telegramId) {
+  var el = document.getElementById('userDetail');
+  if (el) el.innerHTML = '<div class="card"><div class="skeleton"></div></div>';
+  api('admin_user_by_telegram_id', { telegram_id: telegramId }).then(function (res) {
+    if (!res || !res.found || !res.user) {
+      if (el) el.innerHTML = '<div class="card"><p class="muted">Этот Telegram ID не привязан ни к одному аккаунту QMods.</p></div>';
+      return;
+    }
+    renderUserDetail(res.user);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
@@ -1130,14 +1161,16 @@ function renderUserList(list) {
   if (!list.length) { el.innerHTML = '<p class="muted">Никого не найдено.</p>'; return; }
   el.innerHTML = list.slice(0, 100).map(function (u) {
     return '<button class="user-row" onclick="selectAdminUser(' + jsStr(u.username) + ')">' +
-      '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) + '</span>' +
+      '<span>' + (u.active ? '🟢' : '🔴') + ' ' + esc(u.username) + (u.telegram_id ? ' <code class="muted">id' + esc(u.telegram_id) + '</code>' : '') + '</span>' +
       '<span class="muted">' + (u.active ? u.days_left + 'д' : '') + '</span></button>';
   }).join('');
 }
 
 function filterUsers() {
   var q = document.getElementById('userSearch').value.trim().toLowerCase();
-  var filtered = q ? adminUsers.filter(function (u) { return u.username.toLowerCase().indexOf(q) !== -1; }) : adminUsers;
+  var filtered = q ? adminUsers.filter(function (u) {
+    return u.username.toLowerCase().indexOf(q) !== -1 || (u.telegram_id || '').indexOf(q) !== -1;
+  }) : adminUsers;
   renderUserList(filtered);
 }
 

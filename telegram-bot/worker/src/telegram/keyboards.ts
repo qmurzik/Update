@@ -246,13 +246,16 @@ export interface AdminUserRow {
   username: string;
   active: boolean;
   days_left: number;
+  telegram_id: string;
 }
 
 /** Browsable, click-through list of users — the alternative to typing a username every time. */
 export const adminUsersListKeyboard = (rows: AdminUserRow[], page: number, hasPrev: boolean, hasNext: boolean): InlineKeyboard => {
   const kb: InlineKeyboard = rows.map((u) => [
     {
-      text: `${u.active ? '🟢' : '🔴'} ${u.username}${u.active ? ` · ${u.days_left}д` : ''}`,
+      // telegram_id тоже виден прямо в списке — не только на карточке —
+      // чтобы не открывать каждого по очереди, если ищут конкретный id.
+      text: `${u.active ? '🟢' : '🔴'} ${u.username}${u.active ? ` · ${u.days_left}д` : ''}${u.telegram_id ? ` · id${u.telegram_id}` : ''}`,
       callback_data: `adm:u:${u.username}`,
     },
   ]);
