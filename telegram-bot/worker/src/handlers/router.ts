@@ -1,5 +1,6 @@
 import type { Env } from '../config';
 import { isAdmin } from '../config';
+import type { Ctx } from './context';
 import { buildCtx } from './context';
 import { clearState, getState, setState, upsertTelegramUser } from '../db';
 import { reportError } from '../errorReport';
@@ -382,6 +383,26 @@ async function dispatchMessage(ctx: ReturnType<typeof buildCtx>, env: Env, chatI
   }
 }
 
+/**
+ * Telegram invalidates a callback_query_id after a short, undocumented
+ * window — if the handler it's attached to takes too long (a slow PHP
+ * admin lookup, a cold D1 read), answerCallbackQuery itself starts
+ * throwing "query is too old". That's harmless — the handler's own
+ * reply/edit already reached the user, the callback answer is just the
+ * button's loading spinner — but left unguarded it used to cascade: the
+ * failure inside the try block landed in the catch block, which tried to
+ * answer the SAME stale query again and threw a second, unhandled time,
+ * surfacing as a top-level "Где: handleUpdate" alert. Swallow it here
+ * instead of letting a UI nicety turn into a false alarm.
+ */
+async function safeAnswerCallback(ctx: Ctx, text?: string, showAlert = false): Promise<void> {
+  try {
+    await ctx.tg.answerCallbackQuery(ctx.callbackQueryId!, text, showAlert);
+  } catch (err) {
+    console.error('answerCallbackQuery failed (ignored, likely a stale/expired query)', err);
+  }
+}
+
 async function handleCallback(update: TgUpdate, env: Env): Promise<void> {
   const cq = update.callback_query!;
   const chatId = cq.message?.chat.id;
@@ -393,21 +414,21 @@ async function handleCallback(update: TgUpdate, env: Env): Promise<void> {
 
   const handler = CALLBACK_HANDLERS[data] ?? matchDynamicCallback(data);
   if (!handler) {
-    await ctx.tg.answerCallbackQuery(cq.id);
+    await safeAnswerCallback(ctx);
     return;
   }
 
   if (data.startsWith('adm:') && !isAdmin(env, telegramId)) {
-    await ctx.tg.answerCallbackQuery(cq.id, '⛔ Недостаточно прав', true);
+    await safeAnswerCallback(ctx, '⛔ Недостаточно прав', true);
     return;
   }
 
   try {
     await handler(ctx);
-    await ctx.tg.answerCallbackQuery(cq.id);
+    await safeAnswerCallback(ctx);
   } catch (err) {
     console.error('callback handler failed', data, err);
     await reportError(env, err, `callback ${data}`);
-    await ctx.tg.answerCallbackQuery(cq.id, 'Произошла ошибка, попробуйте ещё раз', true);
+    await safeAnswerCallback(ctx, 'Произошла ошибка, попробуйте ещё раз', true);
   }
 }
