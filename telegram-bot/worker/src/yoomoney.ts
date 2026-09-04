@@ -36,35 +36,71 @@ export interface YooMoneyNotification {
   codepro: string;
   label: string;
   unaccepted: string;
-  sha1_hash: string;
+  /** Current signature field — see verifyNotificationSignature. Empty on notifications from before ЮMoney's sha1_hash→sign migration, which we no longer support (see git history for the old scheme). */
+  sign: string;
 }
 
-async function sha1Hex(input: string): Promise<string> {
-  const bytes = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest('SHA-1', bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
- * Verifies the sha1_hash ЮMoney sends with every notification, per their
- * documented field order:
- *   sha1(type&operation_id&amount&currency&datetime&sender&codepro&secret&label)
- * This is the ONLY thing that proves a POST to the webhook actually came
- * from ЮMoney — the endpoint itself has no other auth (ЮMoney doesn't
- * support custom headers on notifications), so every field read from an
- * unverified notification must be treated as attacker-controlled until
- * this returns true.
+ * Verifies the `sign` field ЮMoney sends with every notification — this
+ * used to be `sha1_hash` (plain SHA1 over a fixed, short list of fields
+ * with the secret concatenated in the middle), but live production
+ * notifications no longer carry that field at all; they carry `sign`
+ * instead, a 64-hex-char (SHA-256-length) value. Per ЮMoney's current
+ * docs, the algorithm is: take every notification parameter EXCEPT
+ * `sign`, sort by key name alphabetically, join the pairs (still in their
+ * original percent-encoded form) with `&`, then HMAC-SHA256 that string
+ * using the notification secret as the HMAC key (not concatenated into
+ * the message, unlike the old scheme) — hex-encoded, lowercase.
+ *
+ * This works on the RAW request body rather than a parsed/decoded
+ * notification object specifically to avoid re-encoding the string
+ * ourselves — any difference from ЮMoney's own percent-encoding (e.g. `:`
+ * as `%3A` vs literal) would silently break the HMAC even with a
+ * perfectly correct secret. Reusing their exact original `key=value`
+ * substrings sidesteps that entirely.
  */
-export async function verifyNotificationSignature(env: Env, n: YooMoneyNotification): Promise<boolean> {
+export async function verifyNotificationSignature(env: Env, rawBody: string): Promise<boolean> {
   if (!env.YOOMONEY_NOTIFICATION_SECRET) return false;
-  const base = [n.notification_type, n.operation_id, n.amount, n.currency, n.datetime, n.sender, n.codepro, env.YOOMONEY_NOTIFICATION_SECRET, n.label].join(
-    '&'
-  );
-  const expected = await sha1Hex(base);
-  return timingSafeEqual(expected, n.sha1_hash.toLowerCase());
+
+  const entries: Array<{ key: string; raw: string }> = [];
+  let receivedSign = '';
+  for (const pair of rawBody.split('&')) {
+    if (!pair) continue;
+    const eq = pair.indexOf('=');
+    const rawKey = eq === -1 ? pair : pair.slice(0, eq);
+    let key: string;
+    try {
+      key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
+    } catch {
+      continue; // malformed percent-encoding — can't be a legit field name, skip it
+    }
+    if (key === 'sign') {
+      const rawValue = eq === -1 ? '' : pair.slice(eq + 1);
+      try {
+        receivedSign = decodeURIComponent(rawValue.replace(/\+/g, ' ')).toLowerCase();
+      } catch {
+        return false;
+      }
+      continue;
+    }
+    entries.push({ key, raw: pair });
+  }
+  if (!receivedSign) return false;
+
+  entries.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const signedString = entries.map((e) => e.raw).join('&');
+
+  const expected = await hmacSha256Hex(env.YOOMONEY_NOTIFICATION_SECRET, signedString);
+  return timingSafeEqual(expected, receivedSign);
 }
 
-/** Parses the notification's `application/x-www-form-urlencoded` body into the typed shape above. */
+/** Parses the notification's `application/x-www-form-urlencoded` body into the typed shape above — for the business fields (label, amount, ...), NOT for signature verification (that reads the raw body directly, see verifyNotificationSignature). */
 export function parseNotification(formData: URLSearchParams): YooMoneyNotification {
   return {
     notification_type: formData.get('notification_type') ?? '',
@@ -77,6 +113,6 @@ export function parseNotification(formData: URLSearchParams): YooMoneyNotificati
     codepro: formData.get('codepro') ?? '',
     label: formData.get('label') ?? '',
     unaccepted: formData.get('unaccepted') ?? '',
-    sha1_hash: formData.get('sha1_hash') ?? '',
+    sign: formData.get('sign') ?? '',
   };
 }

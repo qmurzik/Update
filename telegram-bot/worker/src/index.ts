@@ -380,7 +380,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const bodyText = await request.text();
     const notification = parseNotification(new URLSearchParams(bodyText));
 
-    const validSignature = await verifyNotificationSignature(env, notification);
+    const validSignature = await verifyNotificationSignature(env, bodyText);
     if (!validSignature) {
       console.error('yoomoney webhook: bad signature', notification.operation_id || '(no operation_id)');
       // This used to fail completely silently — a wrong/missing
@@ -391,12 +391,11 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
       // one alert per 10 minutes, not one per retried notification.
       //
       // Every field logged here is exactly what ЮMoney itself sends in the
-      // notification body — none of it is secret, all of it is exactly
-      // what verifyNotificationSignature() hashes together (see
-      // yoomoney.ts). secretLen is the CONFIGURED secret's character
-      // count, never the value itself — enough to catch "empty/unset" (0)
-      // or "pasted with a trailing space/newline" (off from the real
-      // length) without ever exposing the secret.
+      // notification body — none of it is secret. secretLen is the
+      // CONFIGURED secret's character count, never the value itself —
+      // enough to catch "empty/unset" (0) or "pasted with a trailing
+      // space/newline" (off from the real length) without ever exposing
+      // the secret.
       const secretLen = (env.YOOMONEY_NOTIFICATION_SECRET ?? '').length;
       ctx.waitUntil(
         reportError(
@@ -412,15 +411,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
               `datetime=${notification.datetime || '?'}`,
               `sender=${notification.sender || '?'}`,
               `codepro=${notification.codepro || '?'}`,
-              `received_hash=${notification.sha1_hash || '?'}`,
+              `received_sign=${notification.sign || '?'}`,
               `secret_len=${secretLen}`,
-              // sender/sha1_hash showing up empty here needs the RAW body
-              // to diagnose — is the field genuinely absent from what
-              // ЮMoney sent, or is parseNotification's URLSearchParams
-              // parse silently losing it (wrong delimiter, encoding
-              // issue)? Nothing in the raw body is secret — it's exactly
-              // what verifyNotificationSignature() hashes, our own secret
-              // never appears in it.
               `raw_body=${bodyText.slice(0, 1500)}`,
             ].join(' | ')
           ),
