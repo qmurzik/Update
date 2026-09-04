@@ -414,6 +414,14 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
               `codepro=${notification.codepro || '?'}`,
               `received_hash=${notification.sha1_hash || '?'}`,
               `secret_len=${secretLen}`,
+              // sender/sha1_hash showing up empty here needs the RAW body
+              // to diagnose — is the field genuinely absent from what
+              // ЮMoney sent, or is parseNotification's URLSearchParams
+              // parse silently losing it (wrong delimiter, encoding
+              // issue)? Nothing in the raw body is secret — it's exactly
+              // what verifyNotificationSignature() hashes, our own secret
+              // never appears in it.
+              `raw_body=${bodyText.slice(0, 1500)}`,
             ].join(' | ')
           ),
           'yoomoney webhook: signature check'
