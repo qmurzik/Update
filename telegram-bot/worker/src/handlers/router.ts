@@ -14,7 +14,8 @@ import { showProfile } from './profile';
 import { showSubscription } from './subscription';
 import { askRemoveDevice, confirmRemoveDevice, showDevices } from './devices';
 import { showPayments } from './payments';
-import { askBuyPlan, checkOrderStatus, handleBuyDeviceSlot, handleBuyPlan, handlePaidReturn } from './payment';
+import { askBuyPlan, askBuyPlanX5, checkOrderStatus, handleBuyDeviceSlot, handleBuyDeviceSlotX5, handleBuyPlan, handleBuyPlanX5, handlePaidReturn } from './payment';
+import { askRemoveDeviceX5, confirmRemoveDeviceX5, showX5Menu } from './x5';
 import { markAllRead, showNotifications } from './notifications';
 import { askSupportMessage, handleSupportMessageInput, showSupport } from './support';
 import { showAchievements } from './achievements';
@@ -102,6 +103,14 @@ const CALLBACK_HANDLERS: Record<string, (ctx: ReturnType<typeof buildCtx>) => Pr
   'dev:rm:ask': askRemoveDevice,
   'dev:rm:yes': confirmRemoveDevice,
   'dev:clone': handleBuyDeviceSlot,
+  // X5 — второе, отдельно продаваемое приложение (см. README "X5 — второе
+  // приложение") — свой набор callback_data, полностью параллельный
+  // основным m:*/pay:*/dev:* выше.
+  'm:x5': showX5Menu,
+  'x5:pay': askBuyPlanX5,
+  'x5:dev:rm:ask': askRemoveDeviceX5,
+  'x5:dev:rm:yes': confirmRemoveDeviceX5,
+  'x5:dev:clone': handleBuyDeviceSlotX5,
   'notif:readall': markAllRead,
   'adm:menu': showAdminMenu,
   'adm:stats': showStats,
@@ -156,6 +165,18 @@ function matchDynamicCallback(data: string): ((ctx: ReturnType<typeof buildCtx>)
   }
   if (data.startsWith('pay:check:')) {
     const orderId = data.slice('pay:check:'.length);
+    return (ctx) => checkOrderStatus(ctx, orderId);
+  }
+  // X5's own plan/order callbacks — must be checked BEFORE the bare
+  // 'pay:plan:'/'pay:check:' prefixes above would ever match, since
+  // 'x5:pay:plan:' doesn't start with 'pay:' so there's no actual overlap,
+  // but keeping them adjacent here for readability.
+  if (data.startsWith('x5:pay:plan:')) {
+    const planId = data.slice('x5:pay:plan:'.length);
+    return (ctx) => handleBuyPlanX5(ctx, planId);
+  }
+  if (data.startsWith('x5:pay:check:')) {
+    const orderId = data.slice('x5:pay:check:'.length);
     return (ctx) => checkOrderStatus(ctx, orderId);
   }
   // Buttons on the confirmation message sent by /device/pair/notify-username

@@ -4,7 +4,7 @@ import { verifyWebhookSecret } from './security';
 import { handleUpdate } from './handlers/router';
 import { TelegramClient } from './telegram/client';
 import { QmodsAdminApi, QmodsUserApi } from './qmodsApi';
-import { DEVICE_SLOT_PLAN_ID } from './handlers/payment';
+import { DEVICE_SLOT_PLAN_ID, X5_DEVICE_SLOT_PLAN_ID } from './handlers/payment';
 import { appDownloadButton } from './handlers/app';
 import { esc, kiraImage } from './util';
 import { reportError } from './errorReport';
@@ -188,7 +188,12 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const allowed = await checkRateLimit(env, `device-pair-start:${clientIp(request)}`, 10, 600);
     if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
 
-    const code = await createDevicePairing(env);
+    // 'app' ('main' | 'x5', see README "X5 — второе приложение") — a query
+    // param rather than a body, matching /device/pair/notify-username below
+    // (the smali client just changes the URL literal per build, no new
+    // body-carrying POST needed — see android-client/README.md).
+    const app = url.searchParams.get('app') === 'x5' ? 'x5' : 'main';
+    const code = await createDevicePairing(env, app);
     return jsonResponse({
       success: true,
       code,
@@ -270,12 +275,17 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const allowed = await checkRateLimit(env, `device-sub:${token}`, 30, 600);
     if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
 
-    const username = await getUsernameByDeviceToken(env, token);
-    if (!username) return jsonResponse({ success: false, revoked: true, error: 'Unknown or revoked device token' }, 401);
+    // Which app (main | x5) this token is scoped to comes from the token's
+    // OWN D1 row (see db.ts getUsernameByDeviceToken) — never from a
+    // client-supplied param, so a token can't be used to read the other
+    // product's subscription.
+    const resolved = await getUsernameByDeviceToken(env, token);
+    if (!resolved) return jsonResponse({ success: false, revoked: true, error: 'Unknown or revoked device token' }, 401);
+    const { username, app } = resolved;
 
     const versionCode = Number.parseInt(url.searchParams.get('version_code') ?? '', 10) || 0;
     const api = new QmodsUserApi(env);
-    const res = await api.subscriptionByUsername(username, versionCode);
+    const res = await api.subscriptionByUsername(username, versionCode, app);
     if (!res.success) {
       // Hit on every device's ~90s heartbeat — a real failure here (PHP auth
       // broken, site down, etc.) strands every app user on GateActivity's
@@ -309,12 +319,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const allowed = await checkRateLimit(env, `device-unlink:${token}`, 10, 600);
     if (!allowed) return jsonResponse({ success: false, error: 'Too many requests' }, 429);
 
-    const username = await getUsernameByDeviceToken(env, token);
-    if (!username) return jsonResponse({ success: true, already_unlinked: true });
+    const resolved = await getUsernameByDeviceToken(env, token);
+    if (!resolved) return jsonResponse({ success: true, already_unlinked: true });
+    const { username, app } = resolved;
 
-    await revokeDeviceTokensForUsername(env, username);
+    await revokeDeviceTokensForUsername(env, username, app);
     const api = new QmodsUserApi(env);
-    await api.deviceRemoveByUsername(username).catch((err) => console.error('device unlink: qmods.ru mirror failed', username, err));
+    await api.deviceRemoveByUsername(username, app).catch((err) => console.error('device unlink: qmods.ru mirror failed', username, err));
 
     return jsonResponse({ success: true });
   }
@@ -344,7 +355,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext, url: URL
     const versionCode = Number(body.version_code ?? 0) || 0;
 
     const token = url.searchParams.get('token') ?? '';
-    const username = token ? await getUsernameByDeviceToken(env, token) : null;
+    const resolved = token ? await getUsernameByDeviceToken(env, token) : null;
+    const username = resolved?.username ?? null;
 
     // Android's Log.getStackTraceString() output already starts with the
     // exception's own toString() ("Name: message\n\tat ...") — stack's first
@@ -577,24 +589,31 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
   const adminApi = new QmodsAdminApi(env);
   const tg = new TelegramClient(env);
 
+  // X5 — второе, отдельно продаваемое приложение (см. README "X5 — второе
+  // приложение"): order.app decides which product's own PHP action to
+  // call (record_payment_x5/grant_device_slot_x5 vs the main ones) — same
+  // order-shaped row, completely separate entitlement on the other end.
+  const isX5 = order.app === 'x5';
+
   // "Клон" — a device-cap purchase, not a subscription extension. Branched
   // separately since it calls a different PHP action (grant_device_slot,
   // not record_payment) and doesn't extend subscription.expires_at — see
-  // handlers/payment.ts handleBuyDeviceSlot.
-  if (order.plan_id === DEVICE_SLOT_PLAN_ID) {
-    const res = await adminApi.grantDeviceSlot(order.username, order.amount);
+  // handlers/payment.ts handleBuyDeviceSlot/handleBuyDeviceSlotX5.
+  if (order.plan_id === DEVICE_SLOT_PLAN_ID || order.plan_id === X5_DEVICE_SLOT_PLAN_ID) {
+    const res = isX5 ? await adminApi.grantDeviceSlotX5(order.username, order.amount) : await adminApi.grantDeviceSlot(order.username, order.amount);
     if (!res.success) {
-      throw new Error(`grant_device_slot failed for order ${order.id}: ${res.error ?? 'unknown'}`);
+      throw new Error(`grant_device_slot${isX5 ? '_x5' : ''} failed for order ${order.id}: ${res.error ?? 'unknown'}`);
     }
 
     // Same apk as the first device — see handlers/app.ts appDownloadButton.
-    const downloadRow = appDownloadButton(await new QmodsUserApi(env).appRelease());
+    // X5 has no separate download link of its own yet, so the button is
+    // main-app-only; the X5 confirmation text just skips it.
+    const downloadRow = isX5 ? null : appDownloadButton(await new QmodsUserApi(env).appRelease());
+    const confirmText = isX5
+      ? '✅ <b>Оплата получена!</b>\n\n🧬 Клон X5 активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства X5».'
+      : '✅ <b>Оплата получена!</b>\n\n🧬 Клон активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства». Установите на него то же приложение QMods, что и на первом.';
     const sent = await tg
-      .sendMessage(
-        order.telegram_id,
-        '✅ <b>Оплата получена!</b>\n\n🧬 Клон активирован — второе устройство можно привязать прямо сейчас, в разделе «⚙️ Устройства». Установите на него то же приложение QMods, что и на первом.',
-        downloadRow ? [downloadRow] : undefined
-      )
+      .sendMessage(order.telegram_id, confirmText, downloadRow ? [downloadRow] : undefined)
       .then(() => true)
       .catch((err) => {
         console.error('device slot payment confirmation delivery failed', order.telegram_id, err);
@@ -607,9 +626,11 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
     return;
   }
 
-  const res = await adminApi.recordPayment(order.username, order.plan_title, order.days, order.amount);
+  const res = isX5
+    ? await adminApi.recordPaymentX5(order.username, order.plan_title, order.days, order.amount)
+    : await adminApi.recordPayment(order.username, order.plan_title, order.days, order.amount);
   if (!res.success) {
-    throw new Error(`record_payment failed for order ${order.id}: ${res.error ?? 'unknown'}`);
+    throw new Error(`record_payment${isX5 ? '_x5' : ''} failed for order ${order.id}: ${res.error ?? 'unknown'}`);
   }
 
   // "Кураторство" (see README "Кураторы") — a curator can pay for a WARD's
@@ -621,11 +642,14 @@ async function finalizePayment(env: Env, order: PaymentOrderRow): Promise<void> 
   // confirmation message for a purchase that already succeeded server-side
   // (recordPayment above) — default to the common case (self-purchase) on
   // any lookup failure instead of leaving the whole function to reject.
-  const buyerMe = await new QmodsUserApi(env).me(order.telegram_id).catch(() => null);
-  const boughtForSelf = !buyerMe?.user || buyerMe.user.username.toLowerCase() === order.username.toLowerCase();
+  // X5 не участвует в кураторстве (нет режима "купил для подопечного") —
+  // всегда self-purchase, поэтому buyerMe-проверку ниже можно пропустить.
+  const buyerMe = isX5 ? null : await new QmodsUserApi(env).me(order.telegram_id).catch(() => null);
+  const boughtForSelf = isX5 || !buyerMe?.user || buyerMe.user.username.toLowerCase() === order.username.toLowerCase();
+  const planLabel = isX5 ? `X5: ${order.plan_title}` : order.plan_title;
   const confirmText = boughtForSelf
-    ? `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» активирована на ${order.days} дн. Спасибо!`
-    : `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(order.plan_title)}» для <b>${esc(order.username)}</b> активирована на ${order.days} дн. Спасибо, что заботитесь о своих подопечных!`;
+    ? `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(planLabel)}» активирована на ${order.days} дн. Спасибо!`
+    : `✅ <b>Оплата получена!</b>\n\nПодписка «${esc(planLabel)}» для <b>${esc(order.username)}</b> активирована на ${order.days} дн. Спасибо, что заботитесь о своих подопечных!`;
 
   const sent = await tg
     .sendMessage(order.telegram_id, confirmText)

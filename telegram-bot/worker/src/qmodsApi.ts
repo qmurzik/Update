@@ -57,6 +57,11 @@ export class QmodsUserApi {
     return callApi<{ plans: Array<{ id: string; title: string; price: number; days: number }> }>(this.url, this.token, 'plans');
   }
 
+  /** X5's own tariffs — see README "X5 — второе приложение". Separate price list from plans() above, not a subset of it. */
+  plansX5() {
+    return callApi<{ plans: Array<{ id: string; title: string; price: number; days: number }> }>(this.url, this.token, 'plans_x5');
+  }
+
   me(telegramId: string) {
     return callApi<{
       linked: boolean;
@@ -78,6 +83,20 @@ export class QmodsUserApi {
         ref_count: number;
       };
     }>(this.url, this.token, 'me', { telegram_id: telegramId });
+  }
+
+  /** X5's own profile/subscription — see README "X5 — второе приложение". Deliberately narrower than me() above: X5 doesn't participate in achievements/levels/referrals, just its own subscription and device slot. */
+  meX5(telegramId: string) {
+    return callApi<{
+      linked: boolean;
+      user: null | {
+        username: string;
+        subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string };
+        device: { linked: boolean; id: string };
+        extra_device_slot: boolean;
+        max_devices: number;
+      };
+    }>(this.url, this.token, 'me_x5', { telegram_id: telegramId });
   }
 
   link(telegramId: string, code: string) {
@@ -123,14 +142,15 @@ export class QmodsUserApi {
     );
   }
 
-  devices(telegramId: string) {
+  /** `app` ('main' | 'x5', see README "X5 — второе приложение") — which product's own device record to read. Defaults to 'main' so every pre-X5 call site keeps working unchanged. */
+  devices(telegramId: string, app: string = 'main') {
     return callApi<{
       devices: Array<{ id: string; id_short: string; name: string | null; android_version: string | null; added_at: number; last_seen: number }>;
-    }>(this.url, this.token, 'devices', { telegram_id: telegramId });
+    }>(this.url, this.token, 'devices', { telegram_id: telegramId, app });
   }
 
-  deviceRemove(telegramId: string, deviceId: string) {
-    return callApi(this.url, this.token, 'device_remove', { telegram_id: telegramId, device_id: deviceId }, 'POST');
+  deviceRemove(telegramId: string, deviceId: string, app: string = 'main') {
+    return callApi(this.url, this.token, 'device_remove', { telegram_id: telegramId, device_id: deviceId, app }, 'POST');
   }
 
   /**
@@ -139,8 +159,8 @@ export class QmodsUserApi {
    * a successful pairing claim, so the app shows up in the bot's/cabinet's
    * "Устройства" section like any other device.
    */
-  deviceRegister(telegramId: string, deviceId: string) {
-    return callApi(this.url, this.token, 'device_register', { telegram_id: telegramId, device_id: deviceId }, 'POST');
+  deviceRegister(telegramId: string, deviceId: string, app: string = 'main') {
+    return callApi(this.url, this.token, 'device_register', { telegram_id: telegramId, device_id: deviceId, app }, 'POST');
   }
 
   /**
@@ -149,8 +169,8 @@ export class QmodsUserApi {
    * only knows the device_token -> username mapping (D1), not the account's
    * telegram_id. See mod/api/bot.php `device_remove_by_username`.
    */
-  deviceRemoveByUsername(username: string) {
-    return callApi(this.url, this.token, 'device_remove_by_username', { username }, 'POST');
+  deviceRemoveByUsername(username: string, app: string = 'main') {
+    return callApi(this.url, this.token, 'device_remove_by_username', { username, app }, 'POST');
   }
 
   notifications(telegramId: string) {
@@ -218,13 +238,13 @@ export class QmodsUserApi {
    * README.md "Проверка во время использования" for why these three
    * concerns share one round-trip instead of three.
    */
-  subscriptionByUsername(username: string, versionCode = 0) {
+  subscriptionByUsername(username: string, versionCode = 0, app: string = 'main') {
     return callApi<{
       found: boolean;
       subscription: { plan: string; active: boolean; days_left: number; expires_at: number; expires_text: string } | null;
       notifications: Array<{ id: string; title: string; message: string; created_at: number }>;
       force_update: { required: boolean; message: string };
-    }>(this.url, this.token, 'device_subscription', { username, version_code: versionCode });
+    }>(this.url, this.token, 'device_subscription', { username, version_code: versionCode, app });
   }
 
   // ============================================================
@@ -278,6 +298,8 @@ export interface AdminUserCard {
   wards: Array<{ username: string; active: boolean; expires_text: string }>;
   curator_username: string | null;
   payments: Array<{ plan: string; amount: number; date_text: string }>;
+  /** X5 — see README "X5 — второе приложение": a fully separate subscription/device on the same account. */
+  x5: { subscription: { plan: string; active: boolean; days_left: number; expires_text: string }; device_id: string; extra_device_slot: boolean };
 }
 
 export interface AdminUserSummary {
@@ -335,6 +357,15 @@ export class QmodsAdminApi {
     return callApi<{ message: string }>(this.url, this.token, 'remove', { username }, 'POST');
   }
 
+  /** X5's own issue()/remove() — see README "X5 — второе приложение". Same shape, operate on the account's x5_subscription instead of subscription. */
+  issueX5(username: string, days: number) {
+    return callApi<{ message: string }>(this.url, this.token, 'issue_x5', { username, days }, 'POST');
+  }
+
+  removeX5(username: string) {
+    return callApi<{ message: string }>(this.url, this.token, 'remove_x5', { username }, 'POST');
+  }
+
   deleteUser(username: string) {
     return callApi<{ message: string }>(this.url, this.token, 'delete_user', { username }, 'POST');
   }
@@ -383,6 +414,28 @@ export class QmodsAdminApi {
       this.url,
       this.token,
       'grant_device_slot',
+      { username, amount },
+      'POST'
+    );
+  }
+
+  /** X5's own recordPayment() — see README "X5 — второе приложение". */
+  recordPaymentX5(username: string, plan: string, days: number, amount: number) {
+    return callApi<{ message: string; expires_at: number; user_id: string; notification_id: string }>(
+      this.url,
+      this.token,
+      'record_payment_x5',
+      { username, plan, days, amount },
+      'POST'
+    );
+  }
+
+  /** X5's own grantDeviceSlot() — see README "X5 — второе приложение". */
+  grantDeviceSlotX5(username: string, amount: number) {
+    return callApi<{ message: string; user_id: string; notification_id: string }>(
+      this.url,
+      this.token,
+      'grant_device_slot_x5',
       { username, amount },
       'POST'
     );

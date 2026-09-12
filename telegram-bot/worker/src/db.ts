@@ -85,9 +85,10 @@ function randomPairingCode(length = 8): string {
   return [...bytes].map((b) => PAIRING_ALPHABET[b % PAIRING_ALPHABET.length]).join('');
 }
 
-export async function createDevicePairing(env: Env): Promise<string> {
+/** `app` — see README "X5 — второе приложение": 'main' or 'x5', entirely separate device-cap/subscription tracks against the same qmods.ru account. Defaults to 'main' so every pre-X5 call site keeps working unchanged. */
+export async function createDevicePairing(env: Env, app: string = 'main'): Promise<string> {
   const code = randomPairingCode();
-  await env.DB.prepare('INSERT INTO device_pairings (code, status, created_at) VALUES (?, ?, ?)').bind(code, 'pending', Date.now()).run();
+  await env.DB.prepare('INSERT INTO device_pairings (code, status, app, created_at) VALUES (?, ?, ?, ?)').bind(code, 'pending', app, Date.now()).run();
   return code;
 }
 
@@ -95,11 +96,12 @@ export interface DevicePairingRow {
   status: 'pending' | 'claimed' | 'rejected';
   device_token: string | null;
   reason: string | null;
+  app: string;
   created_at: number;
 }
 
 export async function getDevicePairing(env: Env, code: string): Promise<DevicePairingRow | null> {
-  const row = await env.DB.prepare('SELECT status, device_token, reason, created_at FROM device_pairings WHERE code = ?')
+  const row = await env.DB.prepare('SELECT status, device_token, reason, app, created_at FROM device_pairings WHERE code = ?')
     .bind(code)
     .first<DevicePairingRow>();
   if (!row) return null;
@@ -107,13 +109,13 @@ export async function getDevicePairing(env: Env, code: string): Promise<DevicePa
   return row;
 }
 
-/** Live device_token count for `username` — the basis for the device-cap check in claimDevicePairing() below. */
-export async function countActiveDeviceTokens(env: Env, username: string): Promise<number> {
-  const row = await env.DB.prepare('SELECT COUNT(*) as c FROM device_tokens WHERE username = ?').bind(username).first<{ c: number }>();
+/** Live device_token count for `username`, scoped to one app — the basis for the device-cap check in claimDevicePairing() below. */
+export async function countActiveDeviceTokens(env: Env, username: string, app: string = 'main'): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) as c FROM device_tokens WHERE username = ? AND app = ?').bind(username, app).first<{ c: number }>();
   return row?.c ?? 0;
 }
 
-export type ClaimResult = { ok: true; token: string } | { ok: false; reason: 'invalid' | 'device_limit' };
+export type ClaimResult = { ok: true; token: string; app: string } | { ok: false; reason: 'invalid' | 'device_limit' };
 
 /**
  * Called from the bot's `/start devicelink_<CODE>` handler once the
@@ -141,7 +143,12 @@ export async function claimDevicePairing(env: Env, code: string, username: strin
   const row = await getDevicePairing(env, code);
   if (!row || row.status !== 'pending') return { ok: false, reason: 'invalid' };
 
-  if ((await countActiveDeviceTokens(env, username)) >= maxDevices) {
+  // The pairing's own app (set when it was created, see createDevicePairing)
+  // decides which app's device count/cap applies — X5 pairing never counts
+  // against, or is blocked by, the main app's slot, and vice versa.
+  const app = row.app;
+
+  if ((await countActiveDeviceTokens(env, username, app)) >= maxDevices) {
     await env.DB.prepare("UPDATE device_pairings SET status = 'rejected', reason = 'device_limit' WHERE code = ? AND status = 'pending'")
       .bind(code)
       .run();
@@ -155,17 +162,17 @@ export async function claimDevicePairing(env: Env, code: string, username: strin
     .run();
   if (!update.meta.changes) return { ok: false, reason: 'invalid' };
 
-  await env.DB.prepare('INSERT INTO device_tokens (token, username, created_at, last_seen) VALUES (?, ?, ?, ?)').bind(token, username, now, now).run();
-  return { ok: true, token };
+  await env.DB.prepare('INSERT INTO device_tokens (token, username, app, created_at, last_seen) VALUES (?, ?, ?, ?, ?)').bind(token, username, app, now, now).run();
+  return { ok: true, token, app };
 }
 
-/** Resolves a device_token to its qmods.ru username, or null if unknown. Touches last_seen for observability. */
-export async function getUsernameByDeviceToken(env: Env, token: string): Promise<string | null> {
+/** Resolves a device_token to its qmods.ru username AND which app it's scoped to (see README "X5 — второе приложение") — the token itself is the source of truth for `app`, never something the caller/client supplies, so it can't be spoofed to read the wrong product's subscription. Touches last_seen for observability. */
+export async function getUsernameByDeviceToken(env: Env, token: string): Promise<{ username: string; app: string } | null> {
   if (!token) return null;
-  const row = await env.DB.prepare('SELECT username FROM device_tokens WHERE token = ?').bind(token).first<{ username: string }>();
+  const row = await env.DB.prepare('SELECT username, app FROM device_tokens WHERE token = ?').bind(token).first<{ username: string; app: string }>();
   if (!row) return null;
   await env.DB.prepare('UPDATE device_tokens SET last_seen = ? WHERE token = ?').bind(Date.now(), token).run();
-  return row.username;
+  return row;
 }
 
 /**
@@ -193,9 +200,10 @@ export async function revokeDeviceToken(env: Env, deviceId: string): Promise<voi
  * table), the "отвязать устройство" flow calls this unconditionally —
  * not just when qmods.ru itself shows a device — see handlers/devices.ts.
  */
-export async function revokeDeviceTokensForUsername(env: Env, username: string): Promise<void> {
+/** `app` defaults to 'main' so every pre-X5 call site (unlink from the main app) keeps working unchanged — pass 'x5' only from an X5-scoped flow, so unlinking one product never touches the other's tokens. */
+export async function revokeDeviceTokensForUsername(env: Env, username: string, app: string = 'main'): Promise<void> {
   if (!username) return;
-  await env.DB.prepare('DELETE FROM device_tokens WHERE username = ?').bind(username).run();
+  await env.DB.prepare('DELETE FROM device_tokens WHERE username = ? AND app = ?').bind(username, app).run();
 }
 
 export interface PaymentOrderRow {
@@ -208,6 +216,7 @@ export interface PaymentOrderRow {
   amount: number;
   status: 'pending' | 'paid';
   operation_id: string | null;
+  app: string;
   created_at: number;
   paid_at: number | null;
 }
@@ -217,17 +226,19 @@ export interface PaymentOrderRow {
  * "Оплата" tab) — see yoomoney.ts. The generated id is also used as
  * ЮMoney's Quickpay `label` param, so the webhook can resolve an incoming
  * notification back to who/what/how-much from OUR OWN record rather than
- * trusting the notification's own claims about the order.
+ * trusting the notification's own claims about the order. `app` ('main' |
+ * 'x5', see README "X5 — второе приложение") tells index.ts finalizePayment
+ * which product's entitlement to grant once the order is paid.
  */
 export async function createPaymentOrder(
   env: Env,
-  args: { telegramId: string; username: string; planId: string; planTitle: string; days: number; amount: number }
+  args: { telegramId: string; username: string; planId: string; planTitle: string; days: number; amount: number; app?: string }
 ): Promise<string> {
   const id = randomHex(16);
   await env.DB.prepare(
-    'INSERT INTO payment_orders (id, telegram_id, username, plan_id, plan_title, days, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO payment_orders (id, telegram_id, username, plan_id, plan_title, days, amount, status, app, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   )
-    .bind(id, args.telegramId, args.username, args.planId, args.planTitle, args.days, args.amount, 'pending', Date.now())
+    .bind(id, args.telegramId, args.username, args.planId, args.planTitle, args.days, args.amount, 'pending', args.app ?? 'main', Date.now())
     .run();
   return id;
 }

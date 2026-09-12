@@ -32,8 +32,21 @@ export const mainMenu = (env: Env, linked: boolean, isAdmin: boolean): InlineKey
       { text: '🆘 Поддержка', callback_data: 'm:support' },
     ]);
     kb.push([{ text: '👔 Кураторство', callback_data: 'm:curator' }]);
+    // X5 — второе, отдельно продаваемое приложение (см. README "X5 —
+    // второе приложение") — своя подписка/устройство/цены, свой раздел
+    // меню, чтобы не путаться с основной подпиской выше.
+    kb.push([{ text: '🎯 X5', callback_data: 'm:x5' }]);
   }
   if (isAdmin) kb.push([{ text: '🛠 Админ-панель', callback_data: 'adm:menu' }]);
+  return kb;
+};
+
+/** Top-level X5 screen (см. README "X5 — второе приложение") — subscription status + entry points into its own buy/devices flows, all under the `x5:*` callback_data namespace. */
+export const x5MenuKeyboard = (hasDevice: boolean, hasCloneSlot: boolean): InlineKeyboard => {
+  const kb: InlineKeyboard = [[{ text: '💳 Купить/продлить X5', callback_data: 'x5:pay' }]];
+  if (hasDevice) kb.push([{ text: '🗑 Отвязать устройство X5', callback_data: 'x5:dev:rm:ask' }]);
+  if (!hasCloneSlot) kb.push([{ text: '🧬 Купить клона X5 — 300 ₽', callback_data: 'x5:dev:clone' }]);
+  kb.push([{ text: '‹ Назад', callback_data: 'm:main' }]);
   return kb;
 };
 
@@ -70,24 +83,36 @@ export interface PlanRow {
   days: number;
 }
 
-export const planPickerKeyboard = (plans: PlanRow[]): InlineKeyboard => {
-  const kb: InlineKeyboard = plans.map((p) => [{ text: `${p.title} — ${p.price} ₽ / ${p.days} дн.`, callback_data: `pay:plan:${p.id}` }]);
-  kb.push([{ text: '‹ Назад', callback_data: 'm:pay' }]);
+// `prefix`/`backTarget` let X5 (see README "X5 — второе приложение") reuse
+// these three layouts unchanged under its own callback_data namespace
+// (`x5:pay:*`, `x5:dev:*`) instead of a parallel copy of each — every
+// existing call site keeps working unchanged since the new params are
+// optional and trail the original ones.
+export const planPickerKeyboard = (plans: PlanRow[], prefix = 'pay', backTarget = 'm:pay'): InlineKeyboard => {
+  const kb: InlineKeyboard = plans.map((p) => [{ text: `${p.title} — ${p.price} ₽ / ${p.days} дн.`, callback_data: `${prefix}:plan:${p.id}` }]);
+  kb.push([{ text: '‹ Назад', callback_data: backTarget }]);
   return kb;
 };
 
-export const payOrderKeyboard = (url: string, orderId: string): InlineKeyboard => [
+export const payOrderKeyboard = (url: string, orderId: string, prefix = 'pay', backTarget = 'm:pay'): InlineKeyboard => [
   [{ text: '💳 Оплатить', url }],
-  [{ text: '🔄 Проверить оплату', callback_data: `pay:check:${orderId}` }],
-  [{ text: '‹ Назад', callback_data: 'm:pay' }],
+  [{ text: '🔄 Проверить оплату', callback_data: `${prefix}:check:${orderId}` }],
+  [{ text: '‹ Назад', callback_data: backTarget }],
 ];
 
-export const devicesKeyboard = (hasDevice: boolean, hasCloneSlot: boolean, downloadRow: InlineKeyboard[number] | null = null): InlineKeyboard => {
+export const devicesKeyboard = (
+  hasDevice: boolean,
+  hasCloneSlot: boolean,
+  downloadRow: InlineKeyboard[number] | null = null,
+  prefix = 'dev',
+  backTarget = 'm:main',
+  clonePrice = 200
+): InlineKeyboard => {
   const kb: InlineKeyboard = [];
-  if (hasDevice) kb.push([{ text: '🗑 Отвязать устройство', callback_data: 'dev:rm:ask' }]);
-  if (!hasCloneSlot) kb.push([{ text: '🧬 Купить клона — 200 ₽', callback_data: 'dev:clone' }]);
+  if (hasDevice) kb.push([{ text: '🗑 Отвязать устройство', callback_data: `${prefix}:rm:ask` }]);
+  if (!hasCloneSlot) kb.push([{ text: `🧬 Купить клона — ${clonePrice} ₽`, callback_data: `${prefix}:clone` }]);
   if (downloadRow) kb.push(downloadRow);
-  kb.push([{ text: '‹ Назад', callback_data: 'm:main' }]);
+  kb.push([{ text: '‹ Назад', callback_data: backTarget }]);
   return kb;
 };
 

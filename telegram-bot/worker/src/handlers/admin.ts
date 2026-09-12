@@ -305,7 +305,12 @@ export async function confirmDelete(ctx: Ctx): Promise<void> {
   // застревал на бессрочном экране ошибки вместо экрана привязки (см.
   // SubscriptionCheckRunnable в android-client — теперь она сама себя
   // лечит через not_paired, но лучше вообще не оставлять токен висеть).
-  if (res.success) await revokeDeviceTokensForUsername(ctx.env, username);
+  // Аккаунт удаляется целиком — снимаем токены ОБОИХ приложений (main и
+  // X5, см. README "X5 — второе приложение"), не только основного.
+  if (res.success) {
+    await revokeDeviceTokensForUsername(ctx.env, username);
+    await revokeDeviceTokensForUsername(ctx.env, username, 'x5');
+  }
   await logAdminAction(ctx.env, ctx.telegramId, 'delete_user', { username, success: res.success });
   await clearState(ctx.env, ctx.chatId); // аккаунт удалён — карточка больше не существует
   await reply(ctx, res.success ? `✅ ${esc(String(res.message ?? ''))}` : `❌ ${esc(String(res.error ?? ''))}`, cancelKeyboard('adm:menu'));

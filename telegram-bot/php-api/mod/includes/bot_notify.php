@@ -320,6 +320,61 @@ function set_app_version_gate(int $minVersionCode, string $message): void
 }
 
 /**
+ * X5's own version gate (см. README "X5 — второе приложение") — отдельный
+ * файл, а не переиспользование app_version.json: у X5 своя, независимая
+ * нумерация versionCode как отдельного APK, единый гейт с основным
+ * приложением заблокировал бы не те версии не того приложения.
+ */
+function get_app_version_gate_x5(): array
+{
+    return with_locked_json_file(DATA_DIR . '/app_version_x5.json', function (array $data): array {
+        return [$data, [
+            'min_version_code' => (int)($data['min_version_code'] ?? 0),
+            'message' => (string)($data['message'] ?? ''),
+        ]];
+    });
+}
+
+function set_app_version_gate_x5(int $minVersionCode, string $message): void
+{
+    with_locked_json_file(DATA_DIR . '/app_version_x5.json', function () use ($minVersionCode, $message): array {
+        $data = [
+            'min_version_code' => max(0, $minVersionCode),
+            'message' => $message,
+            'updated_at' => time(),
+        ];
+        return [$data, null];
+    });
+}
+
+/**
+ * X5's own subscription calculator (см. README "X5 — второе приложение") —
+ * deliberately NOT reusing subscription_info() (the main-subscription
+ * helper defined elsewhere in the site's codebase) since that one is
+ * scoped to the `subscription` field specifically. X5 stores its
+ * entitlement in a parallel `x5_subscription` field with the exact same
+ * {plan, expires_at} shape, so this is a self-contained equivalent rather
+ * than a shared abstraction — keeps the two products' subscription logic
+ * fully independent, matching how their fields are independent. Lives here
+ * (bot_notify.php) rather than in mod/api/bot.php because mod/admin/bot.php
+ * needs it too, and both already require_once this file.
+ */
+function x5_subscription_info(array $user): array
+{
+    $sub = is_array($user['x5_subscription'] ?? null) ? $user['x5_subscription'] : [];
+    $expiresAt = (int)($sub['expires_at'] ?? 0);
+    $now = time();
+    $active = $expiresAt > $now;
+    return [
+        'plan' => (string)($sub['plan'] ?? 'none'),
+        'active' => $active,
+        'days_left' => $active ? (int)ceil(($expiresAt - $now) / 86400) : 0,
+        'expires_at' => $expiresAt,
+        'expires_text' => $expiresAt > 0 ? date('d.m.Y', $expiresAt) : '—',
+    ];
+}
+
+/**
  * Феча-флаг: принимает ли qmods.ru собственные вход/регистрацию через сайт —
  * часть миграции пользователей на аккаунты, привязанные только к Telegram
  * (см. INTEGRATION.md "Выключатель входа/регистрации на сайте"). По

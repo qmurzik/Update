@@ -81,11 +81,19 @@ CREATE TABLE IF NOT EXISTS error_alerts (
 -- 'device_limit' — the account already has an active device_token, see
 -- ONE_DEVICE_PER_ACCOUNT below). Existing databases need:
 --   ALTER TABLE device_pairings ADD COLUMN reason TEXT;
+-- `app` — see README "X5 — второе приложение": a second Android client,
+-- sold and authorized entirely separately from the main app but against
+-- the SAME qmods.ru account. 'main' | 'x5'. A pairing code is only ever
+-- claimable against the device_token cap for ITS OWN app — pairing X5
+-- never counts against, or unlocks, the main app's device slot, and vice
+-- versa. Existing databases need:
+--   ALTER TABLE device_pairings ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
 CREATE TABLE IF NOT EXISTS device_pairings (
     code          TEXT PRIMARY KEY,
     status        TEXT NOT NULL DEFAULT 'pending', -- pending | claimed | rejected
     device_token  TEXT,
     reason        TEXT,
+    app           TEXT NOT NULL DEFAULT 'main', -- main | x5
     created_at    INTEGER NOT NULL,
     claimed_at    INTEGER
 );
@@ -95,9 +103,14 @@ CREATE TABLE IF NOT EXISTS device_pairings (
 -- this up on every `/device/subscription` call and asks mod/api/bot.php
 -- for that username's subscription. No password, no session cookie, no
 -- other qmods.ru credential ever touches the app.
+-- `app` mirrors device_pairings.app — which of the two products' own
+-- device-count cap and subscription entitlement this token is scoped to.
+-- Existing databases need:
+--   ALTER TABLE device_tokens ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
 CREATE TABLE IF NOT EXISTS device_tokens (
     token       TEXT PRIMARY KEY,
     username    TEXT NOT NULL,
+    app         TEXT NOT NULL DEFAULT 'main', -- main | x5
     created_at  INTEGER NOT NULL,
     last_seen   INTEGER
 );
@@ -110,6 +123,11 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 -- 'paid' is set exactly once (see markPaymentOrderPaid's guarded UPDATE) —
 -- ЮMoney retries its notification until it gets HTTP 200, so this is the
 -- idempotency guard against granting the same order's days twice.
+-- `app` tells index.ts finalizePayment() which product's entitlement to
+-- grant on payment success (main subscription/device-slot vs the X5
+-- equivalents) — see mod/admin/bot.php record_payment_x5/
+-- grant_device_slot_x5. Existing databases need:
+--   ALTER TABLE payment_orders ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
 CREATE TABLE IF NOT EXISTS payment_orders (
     id           TEXT PRIMARY KEY,
     telegram_id  TEXT NOT NULL,
@@ -120,6 +138,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (
     amount       REAL NOT NULL,
     status       TEXT NOT NULL DEFAULT 'pending', -- pending | paid
     operation_id TEXT,
+    app          TEXT NOT NULL DEFAULT 'main', -- main | x5
     created_at   INTEGER NOT NULL,
     paid_at      INTEGER
 );

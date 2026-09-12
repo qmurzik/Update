@@ -333,7 +333,11 @@ async function handleAdminAction(action: string, body: Record<string, unknown>, 
       const username = String(body.username ?? '');
       const res = await adminApi.deleteUser(username);
       // Same D1 cleanup as handlers/admin.ts confirmDelete — see its comment.
-      if (res.success) await revokeDeviceTokensForUsername(env, username);
+      // Аккаунт удаляется целиком — снимаем токены обоих приложений.
+      if (res.success) {
+        await revokeDeviceTokensForUsername(env, username);
+        await revokeDeviceTokensForUsername(env, username, 'x5');
+      }
       return json(res);
     }
 

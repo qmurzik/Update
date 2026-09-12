@@ -253,6 +253,29 @@ best-effort). См. `android-client/README.md` «Отвязка устройст
 ]}
 ```
 
+### X5 — второе приложение *(новое)*
+См. README.md «X5 — второе приложение» для полного описания. Своя
+подписка/устройство на том же аккаунте, полностью отдельно от основных.
+
+- **`plans_x5`** — как `plans`, но из своей константы `PLANS_X5` (1/2/3
+  месяца — отдельная цена, отдельный прайс-лист, не подмножество `plans`).
+- **`me_x5`** — **Параметры:** `telegram_id`. Как `me`, но только
+  подписка/устройство X5 (без ачивок/уровня/рефералов — X5 в них не
+  участвует):
+  ```json
+  {"success": true, "linked": true, "user": {
+    "username": "ivan", "subscription": {...}, "device": {"linked": false, "id": ""},
+    "extra_device_slot": false, "max_devices": 1
+  }}
+  ```
+- **`devices` / `device_remove` / `device_register` /
+  `device_remove_by_username` / `device_subscription`** — все принимают
+  необязательный параметр **`app`** (`"main"` — по умолчанию, или `"x5"`),
+  который выбирает, с какими полями работать (`device_id` vs
+  `x5_device_id`, `subscription` vs `x5_subscription`, и т.д.). Форма
+  ответа не меняется — просто читает/пишет другой набор полей одного и
+  того же пользователя.
+
 ---
 
 ## Админский API (`mod/admin/bot.php`)
@@ -446,6 +469,31 @@ message}`. `min_version_code: 0` = гейт выключен.
 **Параметры:** `items`: `[{"notification_id": "…", "user_id": "…"}, …]`.
 Помечает пары (уведомление, получатель) доставленными — они больше не
 вернутся из `pending_telegram_pushes`.
+
+### X5 — второе приложение *(новое)*
+См. README.md «X5 — второе приложение». Точные аналоги действий выше, но
+на полях `x5_subscription`/`x5_device_id`/`x5_extra_device_slot`.
+
+- **`issue_x5` (POST)** — как `issue`, только продлевает `x5_subscription`.
+  **Параметры:** `username`, `plan`, `days` ИЛИ `expires_date`. В отличие
+  от `issue`, не умеет создавать новый аккаунт (X5 всегда покупается на
+  уже существующий аккаунт qmods.ru).
+- **`remove_x5` (POST)** — как `remove`, снимает `x5_subscription`
+  (`plan: 'none'`, `expires_at: 0`) и очищает `x5_device_id`.
+  **Параметры:** `username`.
+- **`record_payment_x5` (POST)** — как `record_payment`, продлевает
+  `x5_subscription` и пишет в общий `payments[]` с меткой `"X5: <план>"`.
+  **Параметры:** `username`, `plan`, `days`, `amount`.
+- **`grant_device_slot_x5` (POST)** — как `grant_device_slot`, ставит
+  `x5_extra_device_slot`. **Параметры:** `username`, `amount`.
+- **`get_app_version_x5`** / **`set_app_version_x5` (POST)** — как
+  `get_app_version`/`set_app_version`, но свой, отдельный от основного
+  гейт-файл (`data/app_version_x5.json`) — у X5 своя, независимая
+  нумерация `versionCode` как у отдельного APK.
+- **`user`** — карточка пользователя дополнительно содержит поле `x5`:
+  ```json
+  "x5": {"subscription": {...}, "device_id": "", "extra_device_slot": false}
+  ```
 
 ---
 

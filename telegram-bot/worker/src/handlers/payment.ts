@@ -115,16 +115,126 @@ export async function ensureDeviceSlotGranted(env: Env, telegramId: string, orde
   await new QmodsAdminApi(env).grantDeviceSlot(order.username, order.amount).catch(() => undefined);
 }
 
-/** callback_data `pay:check:<orderId>` — manual re-check, in case the webhook is slow or the successURL round-trip didn't land. */
+// ============================================================
+// X5 — второе, отдельно продаваемое приложение (см. README "X5 — второе
+// приложение"). Свои тарифы/цены, своя покупка клона, полностью отдельная
+// от основной подписки — но переиспользует ЭТОТ ЖЕ payment_orders/ЮMoney
+// поток (см. db.ts createPaymentOrder's `app` и index.ts finalizePayment),
+// просто с app: 'x5' и своим набором callback_data (`x5:pay:*`).
+// ============================================================
+
+export const X5_DEVICE_SLOT_PLAN_ID = 'x5_device_slot';
+export const X5_DEVICE_SLOT_PRICE = 300;
+export const X5_DEVICE_SLOT_TITLE = 'X5: Клон (второе устройство)';
+
+/** callback_data `x5:pay` — X5's own plan list, see askBuyPlan above for the main-app equivalent. */
+export async function askBuyPlanX5(ctx: Ctx): Promise<void> {
+  const me = await ctx.api.me(ctx.telegramId);
+  if (!(await requireLinked(ctx, me))) return;
+
+  const res = await ctx.api.plansX5();
+  const plans = res.plans ?? [];
+  if (plans.length === 0) {
+    await reply(ctx, 'Тарифы X5 сейчас недоступны — попробуйте чуть позже.', backButton('m:x5'));
+    return;
+  }
+
+  const lines = ['<b>🎯 X5 — выберите тариф</b>', DIVIDER, ''];
+  for (const p of plans) {
+    lines.push(`<b>${esc(p.title)}</b> — ${money(p.price)} / ${p.days} дн.`);
+  }
+  lines.push('', 'Оплата через ЮMoney — та же схема, что и у основной подписки, но это отдельная покупка для X5.');
+
+  await reply(ctx, lines.join('\n'), planPickerKeyboard(plans, 'x5:pay', 'm:x5'));
+}
+
+/** callback_data `x5:pay:plan:<id>` — creates an app:'x5' order and shows the ЮMoney payment link. */
+export async function handleBuyPlanX5(ctx: Ctx, planId: string): Promise<void> {
+  const me = await ctx.api.me(ctx.telegramId);
+  if (!(await requireLinked(ctx, me))) return;
+
+  const res = await ctx.api.plansX5();
+  const plan = (res.plans ?? []).find((p) => p.id === planId);
+  if (!plan) {
+    await reply(ctx, 'Не нашла такой тариф X5 — похоже, список обновился. Откройте покупку заново.', backButton('m:x5'));
+    return;
+  }
+
+  const orderId = await createPaymentOrder(ctx.env, {
+    telegramId: ctx.telegramId,
+    username: me.user!.username,
+    planId: plan.id,
+    planTitle: plan.title,
+    days: plan.days,
+    amount: plan.price,
+    app: 'x5',
+  });
+
+  await reply(
+    ctx,
+    buildPayMessage(`X5: ${plan.title}`, plan.price, false),
+    payOrderKeyboard(buildOrderUrl(ctx, orderId, plan.price, `X5: ${plan.title}`), orderId, 'x5:pay', 'm:x5')
+  );
+}
+
+/** callback_data `x5:dev:clone` — X5's own "клон", see handleBuyDeviceSlot above. */
+export async function handleBuyDeviceSlotX5(ctx: Ctx): Promise<void> {
+  const me = await ctx.api.me(ctx.telegramId);
+  if (!(await requireLinked(ctx, me))) return;
+
+  const meX5 = await ctx.api.meX5(ctx.telegramId);
+  if (meX5.user?.extra_device_slot) {
+    await reply(ctx, 'У вас уже есть клон X5 — можно привязать второе устройство X5 прямо сейчас, независимо от первого.', backButton('m:x5'));
+    return;
+  }
+
+  const orderId = await createPaymentOrder(ctx.env, {
+    telegramId: ctx.telegramId,
+    username: me.user!.username,
+    planId: X5_DEVICE_SLOT_PLAN_ID,
+    planTitle: X5_DEVICE_SLOT_TITLE,
+    days: 0,
+    amount: X5_DEVICE_SLOT_PRICE,
+    app: 'x5',
+  });
+
+  await reply(
+    ctx,
+    buildPayMessage(X5_DEVICE_SLOT_TITLE, X5_DEVICE_SLOT_PRICE, false),
+    payOrderKeyboard(buildOrderUrl(ctx, orderId, X5_DEVICE_SLOT_PRICE, X5_DEVICE_SLOT_TITLE), orderId, 'x5:pay', 'm:x5')
+  );
+}
+
+/** X5's own ensureDeviceSlotGranted() — see the main-app version above for why this self-heal exists. */
+export async function ensureDeviceSlotGrantedX5(env: Env, telegramId: string, order: PaymentOrderRow): Promise<void> {
+  if (order.plan_id !== X5_DEVICE_SLOT_PLAN_ID) return;
+  const meX5 = await new QmodsUserApi(env).meX5(telegramId);
+  if (!meX5.linked || !meX5.user || meX5.user.extra_device_slot) return;
+  await new QmodsAdminApi(env).grantDeviceSlotX5(order.username, order.amount).catch(() => undefined);
+}
+
+/**
+ * callback_data `pay:check:<orderId>` / `x5:pay:check:<orderId>` — manual
+ * re-check, in case the webhook is slow or the successURL round-trip
+ * didn't land. `order.app` (see db.ts createPaymentOrder) decides which
+ * product's confirmation/back-target to show — X5 orders never hit the
+ * curator branch below since X5 has no curator feature (always self-buy).
+ */
 export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void> {
   const order = await getPaymentOrder(ctx.env, orderId);
   if (!order) {
     await reply(ctx, 'Не нашла такой заказ — возможно, он устарел. Начните оплату заново.', backButton('m:pay'));
     return;
   }
+  const isX5 = order.app === 'x5';
 
   if (order.status === 'paid') {
-    if (order.plan_id === DEVICE_SLOT_PLAN_ID) {
+    if (order.plan_id === DEVICE_SLOT_PLAN_ID || order.plan_id === X5_DEVICE_SLOT_PLAN_ID) {
+      if (isX5) {
+        await ensureDeviceSlotGrantedX5(ctx.env, ctx.telegramId, order);
+        await reply(ctx, '✅ Оплата подтверждена! Клон X5 активирован — второе устройство X5 можно привязать в любой момент.', backButton('m:x5'));
+        return;
+      }
       await ensureDeviceSlotGranted(ctx.env, ctx.telegramId, order);
       const downloadRow = appDownloadButton(await ctx.api.appRelease());
       const kb: InlineKeyboard = downloadRow ? [downloadRow, ...backButton('m:devices')] : backButton('m:devices');
@@ -135,6 +245,12 @@ export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void>
       );
       return;
     }
+
+    if (isX5) {
+      await reply(ctx, `✅ Оплата подтверждена! Подписка «${esc(order.plan_title)}» активна.`, backButton('m:x5'));
+      return;
+    }
+
     // "Кураторство" — a curator checking an order they bought for a ward
     // (order.username differs from their own). See index.ts finalizePayment
     // for the same telegram_id/username-mismatch detection.
@@ -150,7 +266,9 @@ export async function checkOrderStatus(ctx: Ctx, orderId: string): Promise<void>
   await reply(
     ctx,
     buildPayMessage(order.plan_title, order.amount, true),
-    payOrderKeyboard(buildOrderUrl(ctx, order.id, order.amount, order.plan_title), order.id)
+    isX5
+      ? payOrderKeyboard(buildOrderUrl(ctx, order.id, order.amount, order.plan_title), order.id, 'x5:pay', 'm:x5')
+      : payOrderKeyboard(buildOrderUrl(ctx, order.id, order.amount, order.plan_title), order.id)
   );
 }
 

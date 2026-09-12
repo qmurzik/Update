@@ -41,6 +41,20 @@ const LINK_ATTEMPTS_MAX = 8;
 const LINK_ATTEMPTS_WINDOW = 900; // 15 минут
 const LINK_ATTEMPTS_FILE = DATA_DIR . '/bot_link_attempts.json';
 
+// X5 — второе, отдельно продаваемое приложение (см. README "X5 — второе
+// приложение"). Тарифы захардкожены здесь, а не в subscribe/config.php
+// (как основной PLANS) — это самостоятельный прайс-лист, не связанный с
+// основной подпиской. Авторизация и подписка X5 живут в СВОИХ полях
+// пользователя (x5_subscription, x5_device_id, x5_extra_device_slot) —
+// полностью отдельно от основных subscription/device_id, но на том же
+// самом аккаунте qmods.ru.
+const PLANS_X5 = [
+    'x5_m1' => ['title' => '1 месяц', 'price' => 699, 'days' => 30],
+    'x5_m2' => ['title' => '2 месяца', 'price' => 1299, 'days' => 60],
+    'x5_m3' => ['title' => '3 месяца', 'price' => 1999, 'days' => 90],
+];
+const X5_DEVICE_SLOT_PRICE = 300;
+
 // ============================================================
 // JSON / ВВОД
 // ============================================================
@@ -203,6 +217,23 @@ if ($action === 'plans') {
 }
 
 // ============================================================
+// PLANS_X5 — тарифы X5 (см. README "X5 — второе приложение")
+// ============================================================
+
+if ($action === 'plans_x5') {
+    $plans = [];
+    foreach (PLANS_X5 as $id => $plan) {
+        $plans[] = [
+            'id' => (string)$id,
+            'title' => (string)($plan['title'] ?? $id),
+            'price' => (float)($plan['price'] ?? 0),
+            'days' => (int)($plan['days'] ?? 0),
+        ];
+    }
+    bot_json(['success' => true, 'plans' => $plans]);
+}
+
+// ============================================================
 // ME — профиль/подписка привязанного пользователя
 // ============================================================
 
@@ -296,6 +327,47 @@ if ($action === 'me') {
     }
 
     bot_json(['success' => true, 'linked' => false, 'user' => null]);
+}
+
+// ============================================================
+// ME_X5 — профиль/подписка X5 привязанного пользователя (см. README "X5 —
+// второе приложение"). Отдельное, более узкое действие, чем `me` — X5 не
+// участвует в достижениях/уровнях/рефералах основного приложения, только
+// в своей подписке и лимите устройств.
+// ============================================================
+
+if ($action === 'me_x5') {
+    $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    if (!valid_telegram_id($telegramId)) {
+        bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
+    }
+
+    $user = find_user_by_telegram_id(load_users(), $telegramId);
+    if ($user === null) {
+        bot_json(['success' => true, 'linked' => false, 'user' => null]);
+    }
+
+    $sub = x5_subscription_info($user);
+    bot_json([
+        'success' => true,
+        'linked' => true,
+        'user' => [
+            'username' => (string)($user['username'] ?? ''),
+            'subscription' => [
+                'plan' => $sub['plan'],
+                'active' => $sub['active'],
+                'days_left' => $sub['days_left'],
+                'expires_at' => $sub['expires_at'],
+                'expires_text' => $sub['expires_text'],
+            ],
+            'device' => [
+                'linked' => !empty($user['x5_device_id']),
+                'id' => (string)($user['x5_device_id'] ?? ''),
+            ],
+            'extra_device_slot' => !empty($user['x5_extra_device_slot']),
+            'max_devices' => 1 + (!empty($user['x5_extra_device_slot']) ? 1 : 0),
+        ],
+    ]);
 }
 
 // ============================================================
@@ -600,6 +672,10 @@ if ($action === 'unlink') {
 
 if ($action === 'devices') {
     $telegramId = trim((string)($req['telegram_id'] ?? ''));
+    // 'app' (main | x5, see README "X5 — второе приложение") selects which
+    // product's device fields to read — main приложение и X5 хранят свои
+    // device_id/device_name/... полностью отдельно на одном аккаунте.
+    $app = trim((string)($req['app'] ?? 'main')) === 'x5' ? 'x5' : 'main';
     if (!valid_telegram_id($telegramId)) {
         bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
     }
@@ -609,19 +685,25 @@ if ($action === 'devices') {
         bot_json(['success' => false, 'error' => 'Not linked'], 404);
     }
 
+    $idField = $app === 'x5' ? 'x5_device_id' : 'device_id';
+    $nameField = $app === 'x5' ? 'x5_device_name' : 'device_name';
+    $androidField = $app === 'x5' ? 'x5_device_android' : 'device_android';
+    $addedField = $app === 'x5' ? 'x5_device_added_at' : 'device_added_at';
+
     $devices = [];
-    $deviceId = (string)($user['device_id'] ?? '');
+    $deviceId = (string)($user[$idField] ?? '');
     if ($deviceId !== '') {
-        // Текущая архитектура сайта хранит одно устройство на аккаунт
-        // (device_id). Формат ответа уже рассчитан на массив устройств,
-        // чтобы при будущем переходе на data/devices.json (несколько
-        // устройств на аккаунт) бот не пришлось переделывать.
+        // Текущая архитектура сайта хранит одно устройство на аккаунт на
+        // каждое приложение (device_id / x5_device_id). Формат ответа уже
+        // рассчитан на массив устройств, чтобы при будущем переходе на
+        // data/devices.json (несколько устройств на аккаунт) бот не
+        // пришлось переделывать.
         $devices[] = [
             'id' => $deviceId,
             'id_short' => substr($deviceId, 0, 8) . '…',
-            'name' => $user['device_name'] ?? null,           // пока не собирается приложением
-            'android_version' => $user['device_android'] ?? null, // пока не собирается приложением
-            'added_at' => (int)($user['device_added_at'] ?? ($user['created_at'] ?? 0)),
+            'name' => $user[$nameField] ?? null,           // пока не собирается приложением
+            'android_version' => $user[$androidField] ?? null, // пока не собирается приложением
+            'added_at' => (int)($user[$addedField] ?? ($user['created_at'] ?? 0)),
             'last_seen' => (int)($user['last_seen'] ?? 0),
         ];
     }
@@ -636,19 +718,25 @@ if ($action === 'devices') {
 if ($action === 'device_remove') {
     $telegramId = trim((string)($req['telegram_id'] ?? ''));
     $deviceId = trim((string)($req['device_id'] ?? ''));
+    $app = trim((string)($req['app'] ?? 'main')) === 'x5' ? 'x5' : 'main';
     if (!valid_telegram_id($telegramId)) {
         bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
     }
 
-    [$ok, $result] = update_users(function (array $users) use ($telegramId, $deviceId): array {
+    $idField = $app === 'x5' ? 'x5_device_id' : 'device_id';
+    $nameField = $app === 'x5' ? 'x5_device_name' : 'device_name';
+    $androidField = $app === 'x5' ? 'x5_device_android' : 'device_android';
+    $addedField = $app === 'x5' ? 'x5_device_added_at' : 'device_added_at';
+
+    [$ok, $result] = update_users(function (array $users) use ($telegramId, $deviceId, $idField, $nameField, $androidField, $addedField): array {
         foreach ($users as &$u) {
             if ((string)($u['telegram_id'] ?? '') !== $telegramId) continue;
-            $current = (string)($u['device_id'] ?? '');
+            $current = (string)($u[$idField] ?? '');
             if ($current === '' || ($deviceId !== '' && $current !== $deviceId)) {
                 return [$users, ['error' => 'Device not found']];
             }
-            $u['device_id'] = '';
-            unset($u['device_name'], $u['device_android'], $u['device_added_at']);
+            $u[$idField] = '';
+            unset($u[$nameField], $u[$androidField], $u[$addedField]);
             return [$users, ['success' => true, 'username' => (string)($u['username'] ?? '')]];
         }
         unset($u);
@@ -677,15 +765,21 @@ if ($action === 'device_remove') {
 
 if ($action === 'device_remove_by_username') {
     $username = trim((string)($req['username'] ?? ''));
+    $app = trim((string)($req['app'] ?? 'main')) === 'x5' ? 'x5' : 'main';
     if ($username === '') {
         bot_json(['success' => false, 'error' => 'Invalid username'], 400);
     }
 
-    [$ok, $result] = update_users(function (array $users) use ($username): array {
+    $idField = $app === 'x5' ? 'x5_device_id' : 'device_id';
+    $nameField = $app === 'x5' ? 'x5_device_name' : 'device_name';
+    $androidField = $app === 'x5' ? 'x5_device_android' : 'device_android';
+    $addedField = $app === 'x5' ? 'x5_device_added_at' : 'device_added_at';
+
+    [$ok, $result] = update_users(function (array $users) use ($username, $idField, $nameField, $androidField, $addedField): array {
         foreach ($users as &$u) {
             if (strtolower((string)($u['username'] ?? '')) !== strtolower($username)) continue;
-            $u['device_id'] = '';
-            unset($u['device_name'], $u['device_android'], $u['device_added_at']);
+            $u[$idField] = '';
+            unset($u[$nameField], $u[$androidField], $u[$addedField]);
             return [$users, ['success' => true]];
         }
         unset($u);
@@ -712,6 +806,7 @@ if ($action === 'device_remove_by_username') {
 if ($action === 'device_register') {
     $telegramId = trim((string)($req['telegram_id'] ?? ''));
     $deviceId = trim((string)($req['device_id'] ?? ''));
+    $app = trim((string)($req['app'] ?? 'main')) === 'x5' ? 'x5' : 'main';
     if (!valid_telegram_id($telegramId)) {
         bot_json(['success' => false, 'error' => 'Invalid telegram_id'], 400);
     }
@@ -719,12 +814,17 @@ if ($action === 'device_register') {
         bot_json(['success' => false, 'error' => 'Invalid device_id'], 400);
     }
 
-    [$ok, $result] = update_users(function (array $users) use ($telegramId, $deviceId): array {
+    $idField = $app === 'x5' ? 'x5_device_id' : 'device_id';
+    $nameField = $app === 'x5' ? 'x5_device_name' : 'device_name';
+    $addedField = $app === 'x5' ? 'x5_device_added_at' : 'device_added_at';
+    $deviceLabel = $app === 'x5' ? 'X5 (Android)' : 'Android-приложение';
+
+    [$ok, $result] = update_users(function (array $users) use ($telegramId, $deviceId, $idField, $nameField, $addedField, $deviceLabel): array {
         foreach ($users as &$u) {
             if ((string)($u['telegram_id'] ?? '') !== $telegramId) continue;
-            $u['device_id'] = $deviceId;
-            $u['device_name'] = 'Android-приложение';
-            $u['device_added_at'] = time();
+            $u[$idField] = $deviceId;
+            $u[$nameField] = $deviceLabel;
+            $u[$addedField] = time();
             return [$users, ['success' => true]];
         }
         unset($u);
@@ -1139,6 +1239,10 @@ if ($action === 'review_add') {
 
 if ($action === 'device_subscription') {
     $username = trim((string)($req['username'] ?? ''));
+    // 'app' (main | x5) — see README "X5 — второе приложение". Selects
+    // which subscription/version-gate to check; notifications stay shared
+    // (an admin broadcast reaches both apps' users the same way).
+    $app = trim((string)($req['app'] ?? 'main')) === 'x5' ? 'x5' : 'main';
     if ($username === '') {
         bot_json(['success' => false, 'error' => 'Invalid username'], 400);
     }
@@ -1148,7 +1252,7 @@ if ($action === 'device_subscription') {
     // this one action can also gate old app builds and deliver in-app
     // notifications — without a separate endpoint/round-trip.
     $versionCode = (int)($req['version_code'] ?? 0);
-    $gate = get_app_version_gate();
+    $gate = $app === 'x5' ? get_app_version_gate_x5() : get_app_version_gate();
     $forceUpdate = [
         'required' => $gate['min_version_code'] > 0 && $versionCode > 0 && $versionCode < $gate['min_version_code'],
         'message' => $gate['message'],
@@ -1162,7 +1266,7 @@ if ($action === 'device_subscription') {
         bot_json(['success' => true, 'found' => false, 'subscription' => null, 'notifications' => [], 'force_update' => $forceUpdate]);
     }
 
-    $sub = subscription_info($user);
+    $sub = $app === 'x5' ? x5_subscription_info($user) : subscription_info($user);
     $notifications = get_and_mark_app_notifications(strtolower($username), 20);
 
     bot_json([

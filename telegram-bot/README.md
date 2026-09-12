@@ -552,6 +552,60 @@ API-ключ, только номер счёта и один секрет из �
    куратор пропал бы из «👔 Кураторы», но продолжал бы значиться у людей
    в профиле как их куратор.
 
+## X5 — второе приложение
+
+Второе, отдельно продаваемое Android-приложение — на том же аккаунте
+qmods.ru, что и основное, но с полностью независимой подпиской,
+устройством и ценами. Покупается отдельно в боте (раздел «🎯 X5»,
+отдельно от «💳 Оплата») и авторизуется отдельно на устройстве (свой
+`device_token` в D1, свой лимит устройств) — активная/неактивная подписка
+одного приложения никак не влияет на доступ ко второму.
+
+**Тарифы** (захардкожены в `mod/api/bot.php`, константа `PLANS_X5` —
+отдельный прайс-лист, не часть основного `PLANS` из `subscribe/config.php`):
+1 месяц — 699 ₽, 2 месяца — 1299 ₽, 3 месяца — 1999 ₽. Клон (второе
+устройство X5) — 300 ₽ (`X5_DEVICE_SLOT_PRICE` в `handlers/payment.ts`).
+
+**Как устроена независимость на сервере:**
+- **Подписка** — отдельные поля пользователя `x5_subscription` (`{plan,
+  expires_at}`, та же форма, что и основной `subscription`) и
+  `x5_extra_device_slot`, посчитанные своей копией логики,
+  `x5_subscription_info()` в `mod/includes/bot_notify.php` (сознательно НЕ
+  переиспользует общий `subscription_info()` — держит два продукта
+  полностью раздельными).
+- **Устройство** — отдельные поля `x5_device_id`/`x5_device_name`/
+  `x5_device_android`/`x5_device_added_at`. `devices`/`device_register`/
+  `device_remove`/`device_remove_by_username`/`device_subscription` в
+  `mod/api/bot.php` принимают параметр `app` (`main` — по умолчанию, или
+  `x5`) и читают/пишут соответствующий набор полей.
+- **D1** — `device_pairings`/`device_tokens`/`payment_orders` получили
+  колонку `app TEXT NOT NULL DEFAULT 'main'`. Какому приложению
+  принадлежит `device_token`, Worker всегда узнаёт из ЭТОЙ колонки (см.
+  `getUsernameByDeviceToken()` в `db.ts`) — никогда из параметра, который
+  прислал клиент, поэтому подделать `app` снаружи, чтобы прочитать чужую
+  подписку, нельзя.
+- **Покупка** — тот же `payment_orders`/ЮMoney-флоу, что и у основной
+  подписки (см. «Оплата через ЮMoney» выше), просто с `app: 'x5'` и
+  своим набором действий на приёме платежа: `record_payment_x5` /
+  `grant_device_slot_x5` в `mod/admin/bot.php` (плюс `issue_x5`/`remove_x5`
+  для ручной выдачи из админки — те же самые, только на `x5_subscription`).
+  `finalizePayment()` в `index.ts` ветвится по `order.app`.
+- **Гейт версии** — свой файл `data/app_version_x5.json`
+  (`get_app_version_gate_x5`/`set_app_version_gate_x5`), не общий с
+  основным `app_version.json` — у X5 свой, независимый `versionCode` как
+  у отдельного APK, общий гейт блокировал бы не те версии не того
+  приложения. Уведомления в приложение (админская рассылка/личное
+  сообщение) при этом остаются общими на оба продукта — отдельной очереди
+  для X5 не заведено.
+
+**Клиент** — тот же самый smali-модуль (`android-client/`), что и у
+основного приложения, собирается во ВТОРОЙ APK (свой пакет). Единственное
+отличие — один URL-литерал в `DevicePairingRunnable.smali` получает
+суффикс `?app=x5`; дальше всё определяется на сервере по D1, включая
+`SubscriptionCheckRunnable`, который трогать не нужно вообще. Подробности
+и пошаговая инструкция — `android-client/README.md`, раздел
+«X5 — второй билд».
+
 ## Безопасность
 
 - **Webhook**: Telegram шлёт заголовок `X-Telegram-Bot-Api-Secret-Token`
@@ -717,6 +771,19 @@ wrangler d1 execute qmods-telegram-bot --file=./schema.sql --remote
 
 `CREATE TABLE IF NOT EXISTS` делает это безопасным для повторного запуска —
 существующие таблицы не трогаются.
+
+Если база была развёрнута ещё до X5 (см. «X5 — второе приложение» выше) —
+`CREATE TABLE IF NOT EXISTS` не добавит новую колонку `app` в уже
+существующие `device_pairings`/`device_tokens`/`payment_orders`, для них
+нужна отдельная миграция (уже применена на проде через прямой доступ к D1
+в рамках этой сессии, но пригодится при разворачивании с нуля в другом
+окружении):
+
+```sql
+ALTER TABLE device_pairings ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
+ALTER TABLE device_tokens ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
+ALTER TABLE payment_orders ADD COLUMN app TEXT NOT NULL DEFAULT 'main';
+```
 
 ## Расширение
 

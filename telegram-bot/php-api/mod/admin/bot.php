@@ -179,6 +179,7 @@ if ($action === 'user') {
         if (!$matches) continue;
 
         $sub = subscription_info($user);
+        $x5Sub = x5_subscription_info($user);
         $payments = [];
         foreach (($user['payments'] ?? []) as $payment) {
             $date = (int)($payment['date'] ?? 0);
@@ -229,6 +230,20 @@ if ($action === 'user') {
                 'wards' => $wards,
                 'curator_username' => (string)($user['curator_username'] ?? '') !== '' ? (string)$user['curator_username'] : null,
                 'payments' => $payments,
+                // X5 — второе, отдельно продаваемое приложение (см. README
+                // "X5 — второе приложение") — своя подписка/устройство,
+                // полностью независимые от основных выше.
+                'x5' => [
+                    'subscription' => [
+                        'plan' => $x5Sub['plan'],
+                        'active' => $x5Sub['active'],
+                        'days_left' => $x5Sub['days_left'],
+                        'expires_at' => $x5Sub['expires_at'],
+                        'expires_text' => $x5Sub['expires_text'],
+                    ],
+                    'device_id' => (string)($user['x5_device_id'] ?? ''),
+                    'extra_device_slot' => !empty($user['x5_extra_device_slot']),
+                ],
             ],
         ]);
     }
@@ -519,6 +534,265 @@ if ($action === 'grant_device_slot') {
     }
 
     bot_json(['success' => true, 'message' => $message, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+// ============================================================
+// X5 — второе, отдельно продаваемое приложение (см. README "X5 — второе
+// приложение"). Всё ниже — точные аналоги issue/remove/record_payment/
+// grant_device_slot/set_app_version выше, но на полях x5_subscription/
+// x5_device_id/x5_extra_device_slot вместо основных — оба продукта живут
+// на одном аккаунте qmods.ru, но полностью независимо друг от друга.
+// ============================================================
+
+if ($action === 'issue_x5') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $plan = req_string($request, 'plan', 'default');
+    $days = req_int($request, 'days');
+    $expiresDate = req_string($request, 'expires_date');
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+    if (!preg_match('/^[A-Za-z0-9_\-]{1,32}$/', $plan)) {
+        bot_json(['success' => false, 'error' => 'Некорректный тариф.'], 400);
+    }
+
+    $expiresAt = 0;
+    $useDays = false;
+
+    if ($expiresDate !== '') {
+        $timestamp = strtotime($expiresDate . ' 23:59:59');
+        if ($timestamp === false) {
+            bot_json(['success' => false, 'error' => 'Неверный формат даты.'], 400);
+        }
+        $expiresAt = $timestamp;
+    } elseif ($days >= 1 && $days <= 3650) {
+        $useDays = true;
+    } else {
+        bot_json(['success' => false, 'error' => 'Укажите дни или дату.'], 400);
+    }
+
+    $finalExpiresAt = null;
+
+    [$ok, $result] = update_users(function (array $users) use ($username, $expiresAt, $plan, $useDays, $days, &$finalExpiresAt): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                if (!isset($user['x5_subscription']) || !is_array($user['x5_subscription'])) $user['x5_subscription'] = [];
+                $user['x5_subscription']['plan'] = $plan;
+                if ($useDays) {
+                    $currentExpiresAt = (int)($user['x5_subscription']['expires_at'] ?? 0);
+                    $base = max(time(), $currentExpiresAt);
+                    $user['x5_subscription']['expires_at'] = $base + ($days * 86400);
+                } else {
+                    $user['x5_subscription']['expires_at'] = $expiresAt;
+                }
+                $finalExpiresAt = $user['x5_subscription']['expires_at'];
+                break;
+            }
+        }
+        unset($user);
+
+        // В отличие от issue — не создаёт новый аккаунт (X5 всегда покупается
+        // на уже существующий qmods.ru-аккаунт; $create принимается для
+        // единообразия параметров с issue, но не поддерживается здесь).
+        if (!$found) {
+            return [$users, ['error' => 'Пользователь не найден.']];
+        }
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (!empty($result['error'])) bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    $message = $useDays
+        ? "X5-подписка {$username} продлена на {$days} дн. до " . date('d.m.Y', $finalExpiresAt)
+        : "X5-подписка {$username} продлена до " . date('d.m.Y', $finalExpiresAt);
+
+    log_action("Telegram API issue_x5: {$username}");
+    notify_user_event(strtolower($username), '⭐ X5: подписка обновлена', $message);
+    bot_json(['success' => true, 'message' => $message]);
+}
+
+if ($action === 'remove_x5') {
+    need_post();
+    $username = req_string($request, 'username');
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+
+    [$ok, $result] = update_users(function (array $users) use ($username): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                $user['x5_subscription']['plan'] = 'none';
+                $user['x5_subscription']['expires_at'] = 0;
+                $user['x5_device_id'] = '';
+                break;
+            }
+        }
+        unset($user);
+        if (!$found) return [$users, ['error' => 'Пользователь не найден.']];
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (!empty($result['error'])) bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    log_action("Telegram API remove_x5: {$username}");
+    bot_json(['success' => true, 'message' => "X5-подписка снята с {$username}"]);
+}
+
+if ($action === 'record_payment_x5') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $plan = req_string($request, 'plan');
+    $days = req_int($request, 'days');
+    $amount = (float)($request['amount'] ?? 0);
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+    if ($plan === '' || $days < 1 || $days > 3650 || $amount <= 0) {
+        bot_json(['success' => false, 'error' => 'Некорректные параметры оплаты.'], 400);
+    }
+
+    $finalExpiresAt = null;
+    $userId = '';
+    $refResult = ['awarded' => false];
+    [$ok, $result] = update_users(function (array $users) use ($username, $plan, $days, $amount, &$finalExpiresAt, &$userId, &$refResult): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                $userId = (string)($user['id'] ?? '');
+                if (!isset($user['x5_subscription']) || !is_array($user['x5_subscription'])) $user['x5_subscription'] = [];
+                $currentExpiresAt = (int)($user['x5_subscription']['expires_at'] ?? 0);
+                $base = max(time(), $currentExpiresAt);
+                $user['x5_subscription']['plan'] = $plan;
+                $user['x5_subscription']['expires_at'] = $base + ($days * 86400);
+                $finalExpiresAt = $user['x5_subscription']['expires_at'];
+                if (!isset($user['payments']) || !is_array($user['payments'])) {
+                    $user['payments'] = [];
+                }
+                $user['payments'][] = ['plan' => "X5: {$plan}", 'amount' => $amount, 'date' => time()];
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'Пользователь не найден.']];
+
+        $refResult = bot_award_referral_bonus($users, strtolower(trim($username)));
+
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (!empty($result['error'])) bot_json(['success' => false, 'error' => $result['error']], 404);
+
+    $message = "Оплата X5 принята. Подписка «{$plan}» продлена на {$days} дн. до " . date('d.m.Y', $finalExpiresAt);
+    log_action("Telegram bot payment: {$username} +{$days}d X5, {$amount} RUB ({$plan})");
+    $notificationId = notify_user_event(strtolower($username), '💰 X5: оплата прошла успешно', $message);
+    notify_admin_payment_event(strtolower($username), "X5: {$plan}", $amount, $days);
+
+    if (!empty($refResult['awarded'])) {
+        $refDays = (int)$refResult['days'];
+        log_action("Telegram bot payment: referral bonus +{$refDays}d to {$refResult['referrer']} for {$username} (X5)");
+        notify_user_event(
+            strtolower((string)$refResult['referrer']),
+            '🎁 Бонус за приглашение',
+            "Ваш друг {$username} оплатил подписку X5 — начислила вам +{$refDays} дн."
+        );
+    }
+
+    bot_json(['success' => true, 'message' => $message, 'expires_at' => $finalExpiresAt, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+if ($action === 'grant_device_slot_x5') {
+    need_post();
+
+    $username = req_string($request, 'username');
+    $amount = (float)($request['amount'] ?? 0);
+
+    if (!validate_username($username)) {
+        bot_json(['success' => false, 'error' => 'Некорректный ник.'], 400);
+    }
+    if ($amount <= 0) {
+        bot_json(['success' => false, 'error' => 'Некорректная сумма.'], 400);
+    }
+
+    $userId = '';
+    $refResult = ['awarded' => false];
+    [$ok, $result] = update_users(function (array $users) use ($username, $amount, &$userId, &$refResult): array {
+        $found = false;
+        foreach ($users as &$user) {
+            if (($user['username_lower'] ?? '') === strtolower(trim($username))) {
+                $found = true;
+                $userId = (string)($user['id'] ?? '');
+                if (!empty($user['x5_extra_device_slot'])) {
+                    return [$users, ['error' => 'already_granted']];
+                }
+                $user['x5_extra_device_slot'] = true;
+                if (!isset($user['payments']) || !is_array($user['payments'])) {
+                    $user['payments'] = [];
+                }
+                $user['payments'][] = ['plan' => 'X5: Клон (второе устройство)', 'amount' => $amount, 'date' => time()];
+                break;
+            }
+        }
+        unset($user);
+
+        if (!$found) return [$users, ['error' => 'not_found']];
+
+        $refResult = bot_award_referral_bonus($users, strtolower(trim($username)));
+
+        return [$users, ['success' => true]];
+    });
+
+    if (!$ok) bot_json(['success' => false, 'error' => 'Ошибка хранилища.'], 500);
+    if (($result['error'] ?? '') === 'not_found') bot_json(['success' => false, 'error' => 'Пользователь не найден.'], 404);
+    if (($result['error'] ?? '') === 'already_granted') bot_json(['success' => false, 'error' => 'Уже куплено.'], 409);
+
+    $message = 'Оплата X5 принята. Клон активирован — второе устройство X5 доступно, пока активна подписка X5.';
+    log_action("Telegram bot payment: {$username} +device_slot X5, {$amount} RUB (clone)");
+    $notificationId = notify_user_event(strtolower($username), '🧬 X5: клон активирован', $message);
+    notify_admin_payment_event(strtolower($username), 'X5: Клон (второе устройство)', $amount, 0);
+
+    if (!empty($refResult['awarded'])) {
+        $refDays = (int)$refResult['days'];
+        log_action("Telegram bot payment: referral bonus +{$refDays}d to {$refResult['referrer']} for {$username} (X5 clone)");
+        notify_user_event(
+            strtolower((string)$refResult['referrer']),
+            '🎁 Бонус за приглашение',
+            "Ваш друг {$username} оплатил подписку — начислила вам +{$refDays} дн."
+        );
+    }
+
+    bot_json(['success' => true, 'message' => $message, 'user_id' => $userId, 'notification_id' => $notificationId]);
+}
+
+if ($action === 'get_app_version_x5') {
+    bot_json(['success' => true] + get_app_version_gate_x5());
+}
+
+if ($action === 'set_app_version_x5') {
+    need_post();
+    $minVersionCode = req_int($request, 'min_version_code', 0);
+    $message = req_string($request, 'message');
+
+    if ($minVersionCode < 0) {
+        bot_json(['success' => false, 'error' => 'min_version_code must be >= 0'], 400);
+    }
+
+    set_app_version_gate_x5($minVersionCode, $message);
+    log_action("Telegram admin: set_app_version_x5 min_version_code={$minVersionCode}");
+    bot_json(['success' => true]);
 }
 
 // ============================================================

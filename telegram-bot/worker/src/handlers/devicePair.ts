@@ -1,5 +1,5 @@
 import type { Ctx } from './context';
-import { claimDevicePairing, rejectDevicePairing } from '../db';
+import { claimDevicePairing, getDevicePairing, rejectDevicePairing } from '../db';
 import { mainMenu } from '../telegram/keyboards';
 import { esc } from '../util';
 import { reply } from './reply';
@@ -31,17 +31,22 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
     return;
   }
 
-  const maxDevices = me.user.max_devices ?? 1;
+  // Which app (main | x5, see README "X5 — второе приложение") this pairing
+  // is for lives on the pairing row itself (set at /device/pair/start) —
+  // decides which product's own device cap applies here.
+  const pairing = await getDevicePairing(ctx.env, code);
+  const isX5 = pairing?.app === 'x5';
+  const maxDevices = isX5 ? (await ctx.api.meX5(ctx.telegramId)).user?.max_devices ?? 1 : me.user.max_devices ?? 1;
+  const clonePrice = isX5 ? 300 : 200;
+  const devicesSection = isX5 ? '«🎯 X5»' : '«⚙️ Устройства»';
+
   const result = await claimDevicePairing(ctx.env, code, me.user.username, maxDevices);
   if (!result.ok) {
     if (result.reason === 'device_limit') {
-      const extra =
-        maxDevices > 1
-          ? ''
-          : ' Либо купите второе устройство («клон») за 200 ₽ в разделе «⚙️ Устройства» — тогда войти можно будет сразу с двух.';
+      const extra = maxDevices > 1 ? '' : ` Либо купите второе устройство («клон») за ${clonePrice} ₽ в разделе ${devicesSection} — тогда войти можно будет сразу с двух.`;
       await reply(
         ctx,
-        `❌ К этому аккаунту уже привязано максимум устройств (${maxDevices}). Сначала отвяжите одно в разделе «⚙️ Устройства», затем откройте ссылку из нового приложения ещё раз.${extra}`,
+        `❌ К этому аккаунту уже привязано максимум устройств (${maxDevices}). Сначала отвяжите одно в разделе ${devicesSection}, затем откройте ссылку из нового приложения ещё раз.${extra}`,
         mainMenu(ctx.env, true, false)
       );
       return;
@@ -59,11 +64,11 @@ export async function handleDevicePairClaim(ctx: Ctx, code: string): Promise<voi
   // up in the bot's/cabinet's "Устройства" section — best-effort: a failure
   // here shouldn't break the pairing itself (the app is already usable via
   // the device_token regardless of whether it's visible in that list).
-  await ctx.api.deviceRegister(ctx.telegramId, token).catch(() => undefined);
+  await ctx.api.deviceRegister(ctx.telegramId, token, result.app).catch(() => undefined);
 
   await reply(
     ctx,
-    `✅ Готово, приложение привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда не нужно — приложение само поймёт, что привязка прошла.`,
+    `✅ Готово, приложение${result.app === 'x5' ? ' X5' : ''} привязано к аккаунту <b>${esc(me.user.username)}</b>. Возвращаться сюда не нужно — приложение само поймёт, что привязка прошла.`,
     mainMenu(ctx.env, true, false)
   );
 }

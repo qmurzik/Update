@@ -62,6 +62,13 @@
 # NOTE: this method's URL literals must match wherever you deployed the
 # Cloudflare Worker (see telegram-bot/worker/wrangler.toml PUBLIC_URL) —
 # update both occurrences below if it differs from the QMods default.
+#
+# X5 BUILD (see android-client/README.md "X5 — второй билд"): append
+# "?app=x5" to the URL literal immediately below — that's the ONLY smali
+# change needed to make this a fully separate, independently-authorized
+# build. SubscriptionCheckRunnable's URL does NOT need a matching change:
+# the Worker resolves which app a device_token belongs to from its own D1
+# row (set once here, at pairing time), never from a client-supplied param.
 .method public run()V
     .locals 13
 
